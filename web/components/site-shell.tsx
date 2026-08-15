@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * Page chrome shared by every page. The experimental banner and the
@@ -26,7 +27,10 @@ export function SiteShell({
   return (
     <div className="mx-auto max-w-[92rem] px-5 pb-24">
       <header className="pt-8 pb-3">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <ThemeToggle />
+        </div>
         <p className="text-muted-foreground mt-1 max-w-[70ch]">{lede}</p>
         {nav.length > 0 && (
           <nav className="mt-3 flex gap-4 text-sm">
@@ -74,7 +78,8 @@ export function Banner({
 }
 
 export const PUBLIC_NAV = [
-  { href: "/", label: "Threads" },
+  { href: "/", label: "Overview" },
+  { href: "/threads/", label: "Threads" },
   { href: "/accuracy/", label: "Accuracy" },
   { href: "/methodology/", label: "Methodology" },
 ];

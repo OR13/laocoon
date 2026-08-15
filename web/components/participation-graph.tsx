@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTheme } from "next-themes";
 import cytoscape, { type Core, type NodeSingular } from "cytoscape";
 import fcose from "cytoscape-fcose";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,59 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+/**
+ * Cytoscape's stylesheet, read from the current theme.
+ *
+ * Only the canvas-safe `--cy-*` and hex tokens are used. Cytoscape draws to a 2D
+ * canvas and cannot parse oklch(); handed one it paints black, which turns every
+ * node label into a solid blob.
+ */
+function buildStyle(): cytoscape.StylesheetJson {
+  const ink = cssVar("--cy-ink") || "#1c1917";
+  const panel = cssVar("--cy-halo") || "#ffffff";
+  const primary = cssVar("--cy-primary") || "#2a78d6";
+  const threadBg = cssVar("--thread-bg") || "#eceae4";
+  const threadLine = cssVar("--thread-line") || "#8b8a85";
+  const warn = cssVar("--cy-warn") || "#8a5a00";
+  return [
+    {
+      selector: 'node[kind="person"]',
+      style: {
+        "background-color": "data(fill)", "border-color": primary,
+        width: "data(sz)", height: "data(sz)",
+        label: "data(label)", "font-size": 11, color: ink,
+        "text-outline-color": panel, "text-outline-width": 2.5,
+        "text-valign": "bottom", "text-margin-y": 3, "min-zoomed-font-size": 7,
+      },
+    },
+    { selector: 'node[kind="person"][seeded="yes"]', style: { "border-width": 3.5, "border-style": "solid" } },
+    { selector: 'node[kind="person"][seeded="no"]', style: { "border-width": 1.5, "border-style": "dashed" } },
+    {
+      selector: 'node[kind="thread"]',
+      style: {
+        shape: "round-rectangle", "background-color": threadBg,
+        "border-color": threadLine, "border-width": 1.2,
+        width: "data(sz)", height: "data(hh)",
+        label: "data(label)", "font-size": 10, color: ink,
+        "text-outline-color": panel, "text-outline-width": 2.5,
+        "text-valign": "bottom", "text-margin-y": 3,
+        "text-wrap": "ellipsis", "text-max-width": "160px", "min-zoomed-font-size": 8,
+      },
+    },
+    { selector: 'edge[kind="part"]', style: { width: "data(w)", "line-color": threadLine, opacity: 0.45, "curve-style": "straight" } },
+    {
+      selector: 'edge[kind="reply"]',
+      style: {
+        width: "data(w)", "line-color": primary, opacity: 0.45,
+        "curve-style": "bezier", "control-point-step-size": 26,
+        "target-arrow-shape": "triangle", "target-arrow-color": primary, "arrow-scale": 0.75,
+      },
+    },
+    { selector: ".dim", style: { opacity: 0.07, "text-opacity": 0 } },
+    { selector: ".pick", style: { "border-color": warn, "border-width": 4, "z-index": 99 } },
+  ] as cytoscape.StylesheetJson;
+}
+
 export function ParticipationGraph({ data }: { data: PrivateData }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
@@ -49,6 +103,7 @@ export function ParticipationGraph({ data }: { data: PrivateData }) {
     { kind: "person"; row: Person } | { kind: "thread"; row: Thread } | null
   >(null);
   const [stats, setStats] = useState("");
+  const { resolvedTheme } = useTheme();
 
   const personById = useMemo(
     () => new Map(data.persons.map((p) => [p.id, p])),
@@ -107,15 +162,6 @@ export function ParticipationGraph({ data }: { data: PrivateData }) {
   useEffect(() => {
     if (!boxRef.current) return;
     const ramp = ["--seq-100", "--seq-250", "--seq-400", "--seq-550", "--seq-700"].map(cssVar);
-    // Canvas-safe tokens only. Cytoscape draws to a 2D canvas and cannot parse
-    // oklch(); handed one it paints black, which turns every label into a blob.
-    const ink = cssVar("--cy-ink") || "#1c1917";
-    const panel = cssVar("--cy-halo") || "#ffffff";
-    const primary = cssVar("--cy-primary") || "#2a78d6";
-    const threadBg = cssVar("--thread-bg") || "#eceae4";
-    const threadLine = cssVar("--thread-line") || "#8b8a85";
-    const warn = cssVar("--cy-warn") || "#8a5a00";
-
     const maxMsg = Math.max(1, ...data.persons.map((p) => p.messages));
     const maxThread = Math.max(1, ...data.threads.map((t) => t.message_count));
 
@@ -161,43 +207,7 @@ export function ParticipationGraph({ data }: { data: PrivateData }) {
       container: boxRef.current,
       elements,
       wheelSensitivity: 0.2,
-      style: [
-        {
-          selector: 'node[kind="person"]',
-          style: {
-            "background-color": "data(fill)", "border-color": primary,
-            width: "data(sz)", height: "data(sz)",
-            label: "data(label)", "font-size": 11, color: ink,
-            "text-outline-color": panel, "text-outline-width": 2.5,
-            "text-valign": "bottom", "text-margin-y": 3, "min-zoomed-font-size": 7,
-          },
-        },
-        { selector: 'node[kind="person"][seeded="yes"]', style: { "border-width": 3.5, "border-style": "solid" } },
-        { selector: 'node[kind="person"][seeded="no"]', style: { "border-width": 1.5, "border-style": "dashed" } },
-        {
-          selector: 'node[kind="thread"]',
-          style: {
-            shape: "round-rectangle", "background-color": threadBg,
-            "border-color": threadLine, "border-width": 1.2,
-            width: "data(sz)", height: "data(hh)",
-            label: "data(label)", "font-size": 10, color: ink,
-            "text-outline-color": panel, "text-outline-width": 2.5,
-            "text-valign": "bottom", "text-margin-y": 3,
-            "text-wrap": "ellipsis", "text-max-width": "160px", "min-zoomed-font-size": 8,
-          },
-        },
-        { selector: 'edge[kind="part"]', style: { width: "data(w)", "line-color": threadLine, opacity: 0.45, "curve-style": "straight" } },
-        {
-          selector: 'edge[kind="reply"]',
-          style: {
-            width: "data(w)", "line-color": primary, opacity: 0.45,
-            "curve-style": "bezier", "control-point-step-size": 26,
-            "target-arrow-shape": "triangle", "target-arrow-color": primary, "arrow-scale": 0.75,
-          },
-        },
-        { selector: ".dim", style: { opacity: 0.07, "text-opacity": 0 } },
-        { selector: ".pick", style: { "border-color": warn, "border-width": 4, "z-index": 99 } },
-      ],
+      style: buildStyle(),
     });
 
     cy.on("tap", "node", (evt) => {
@@ -223,6 +233,12 @@ export function ParticipationGraph({ data }: { data: PrivateData }) {
       cyRef.current = null;
     };
   }, [data, fillRank, personById, threadById]);
+
+  // Cytoscape caches the colours it was given, so a theme change needs the
+  // stylesheet rebuilt from the new custom-property values.
+  useEffect(() => {
+    cyRef.current?.style(buildStyle());
+  }, [resolvedTheme]);
 
   // Filters
   useEffect(() => {

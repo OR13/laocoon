@@ -103,11 +103,49 @@ async function readEvents(dir: string): Promise<RawEvent[]> {
   return out;
 }
 
+export interface DailyRow {
+  day: string;
+  messages: number;
+  replies: number;
+  threads_touched: number;
+  participants: number;
+  participants_with_standing: number;
+  new_participants: number;
+  substantive_replies: number;
+  hollow_replies: number;
+  unclear_replies: number;
+  unclassified_replies: number;
+  substantive_ratio: number | null;
+}
+
+export interface ThreadNode {
+  id: string;
+  subject: string;
+  message_count: number;
+  distinct_senders: number;
+  max_depth: number;
+  with_standing: number;
+  started_at: string | null;
+  last_message_at: string | null;
+}
+
+export interface Activity {
+  publication: string;
+  generated_at: string;
+  list_name: string;
+  daily: DailyRow[];
+  thread_graph: {
+    nodes: ThreadNode[];
+    edges: { source: string; target: string; shared_participants: number }[];
+  };
+}
+
 export interface PublicData {
   measures: ThreadMeasure[];
   forecasts: Forecast[];
   windows: CrawlWindow[];
   structure: CommunityStructure | null;
+  activity: Activity | null;
 }
 
 export interface CommunityStructure {
@@ -170,7 +208,21 @@ export async function loadPublic(): Promise<PublicData> {
     if (error instanceof Error && error.message.startsWith("refusing")) throw error;
   }
 
+  let activity: Activity | null = null;
+  try {
+    const raw = JSON.parse(
+      await readFile(join(ARTIFACTS_DIR, "activity.json"), "utf8"),
+    ) as Activity;
+    if (raw.publication !== "aggregate_public") {
+      throw new Error(`refusing activity.json: publication is ${JSON.stringify(raw.publication)}`);
+    }
+    activity = raw;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("refusing")) throw error;
+  }
+
   return {
+    activity,
     measures: [...latest.values()].sort(
       (a, b) => b.messages_total - a.messages_total || a.thread_id.localeCompare(b.thread_id),
     ),

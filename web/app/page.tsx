@@ -1,29 +1,24 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExperimentalBanner, PUBLIC_NAV, SiteShell } from "@/components/site-shell";
-import { Num, RatioCell } from "@/components/measure-cell";
+import { TimeRangeProvider } from "@/components/time-range";
+import { Dashboard } from "@/components/dashboard";
+import { ThreadGraph } from "@/components/thread-graph";
 import { loadPublic } from "@/lib/data";
 
-export default async function ThreadsPage() {
-  const { measures, windows, structure } = await loadPublic();
+export default async function OverviewPage() {
+  const { activity, windows, structure, forecasts, measures } = await loadPublic();
   const last = windows[windows.length - 1];
 
-  const totals = {
-    threads: measures.length,
-    messages: measures.reduce((n, m) => n + m.messages_total, 0),
-    substantive: measures.reduce((n, m) => n + m.substantive_replies, 0),
-    hollow: measures.reduce((n, m) => n + m.hollow_replies, 0),
-    unclear: measures.reduce((n, m) => n + m.unclear_replies, 0),
-    unclassified: measures.reduce((n, m) => n + m.unclassified_replies, 0),
-    unmeasured: measures.filter((m) => m.substantive_reply_ratio === null).length,
-  };
+  const baseline7 = forecasts.filter((f) => f.horizon_days === 7 && f.is_baseline);
+  const defined = baseline7.map((f) => f.spearman).filter((s): s is number => s !== null);
+  const medianBaseline =
+    defined.length > 0 ? [...defined].sort((a, b) => a - b)[Math.floor(defined.length / 2)]! : null;
+  const unmeasured = measures.filter((m) => m.substantive_reply_ratio === null).length;
 
   return (
     <SiteShell
-      title="LAOCOÖN — thread health"
-      lede="Which discussions have engagement, and which have volume."
+      title="LAOCOÖN"
+      lede="What the list actually did this week — and whether volume is being mistaken for consensus."
       active="/"
       nav={PUBLIC_NAV}
       banner={<ExperimentalBanner />}
@@ -42,133 +37,87 @@ export default async function ThreadsPage() {
         </>
       }
     >
-      <p className="text-muted-foreground max-w-[70ch] text-sm">
-        Each row is a discussion thread. The columns are a <strong>vector of separate
-        measures</strong>, deliberately not combined into a score — a single number would
-        invite an argument about weights that cannot be won, and one disputed input would
-        contaminate every column instead of one.
-      </p>
+      {activity ? (
+        <TimeRangeProvider>
+          <Dashboard activity={activity} />
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          ["Threads", totals.threads],
-          ["Messages in threads", totals.messages],
-          ["Replies judged substantive", totals.substantive],
-          ["Replies judged hollow", totals.hollow],
-          ["Model declined to judge", totals.unclear],
-          ["Not yet classified", totals.unclassified],
-          ["Threads with no substance measure", totals.unmeasured],
-          ["Accounts with standing", structure ? `${structure.accounts.seeded} of ${structure.accounts.total}` : "—"],
-        ].map(([label, value]) => (
-          <Card key={String(label)} className="gap-1 py-4">
-            <CardHeader className="px-4">
-              <CardTitle className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                {label}
-              </CardTitle>
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="text-base">Which discussions connect</CardTitle>
+              <CardDescription>
+                Threads active in the selected window. A link means the same people posted
+                in both — so a thread with no links is a conversation nobody carried
+                anywhere else.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="px-4">
-              <div className="tnum text-2xl font-semibold tracking-tight">{value}</div>
+            <CardContent>
+              <ThreadGraph activity={activity} />
             </CardContent>
           </Card>
-        ))}
-      </div>
-
-      <h2 className="mt-10 mb-3 border-b pb-1 text-lg font-semibold">Threads</h2>
-      <div className="overflow-x-auto rounded-lg border">
-        <Table>
-          <TableCaption className="px-3 py-2 text-left">
-            Sorted by message count. Never sorted by any quality measure.
-          </TableCaption>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="min-w-[22rem]">Thread</TableHead>
-              <TableHead className="text-right">Messages</TableHead>
-              <TableHead className="text-right">Participants</TableHead>
-              <TableHead className="text-right">Depth</TableHead>
-              <TableHead className="text-right">Branching</TableHead>
-              <TableHead className="text-right">With standing</TableHead>
-              <TableHead className="text-right">Max core</TableHead>
-              <TableHead>Substantive</TableHead>
-              <TableHead>Quoting</TableHead>
-              <TableHead>New share</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {measures.map((m) => (
-              <TableRow key={m.thread_id}>
-                <TableCell className="max-w-[34rem] whitespace-normal">{m.subject}</TableCell>
-                <TableCell className="text-right"><Num value={m.messages_total} /></TableCell>
-                <TableCell className="text-right"><Num value={m.distinct_senders} /></TableCell>
-                <TableCell className="text-right"><Num value={m.max_depth} /></TableCell>
-                <TableCell className="text-right"><Num value={m.mean_branching_factor} digits={2} /></TableCell>
-                <TableCell className="text-right"><Num value={m.seeded_participants} /></TableCell>
-                <TableCell className="text-right"><Num value={m.max_core_number} /></TableCell>
-                <TableCell><RatioCell value={m.substantive_reply_ratio} /></TableCell>
-                <TableCell><RatioCell value={m.quoting_reply_ratio} /></TableCell>
-                <TableCell><RatioCell value={m.new_participant_share} /></TableCell>
-              </TableRow>
-            ))}
-            {measures.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={10} className="text-muted-foreground italic">
-                  No measures recorded yet.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      <p className="text-muted-foreground mt-3 max-w-[74ch] text-sm">
-        <strong>With standing</strong> counts participants holding community-conferred
-        standing under the published seed rule — a count, never a list, and not a
-        judgement of anyone&apos;s contribution. <strong>New share</strong> is described
-        and never ranked: on a list only weeks old it is near 1 everywhere and carries
-        almost no information, which is why it is shown rather than hidden.
-      </p>
-
-      {structure && (
-        <>
-          <h2 className="mt-10 mb-3 border-b pb-1 text-lg font-semibold">Group structure</h2>
-          <p className="text-muted-foreground max-w-[70ch] text-sm">
-            Communities in the reply graph, found by Louvain at modularity{" "}
-            {structure.modularity.toFixed(3)} — weak at this size, and not to be read as
-            strong structure. A community with no member holding community-conferred
-            standing <em>and</em> a low external-edge ratio is a group that mostly replies
-            to itself. That is a statement about a subgraph, not about anyone&apos;s good
-            faith, and emphatically not about how anything was written.
-          </p>
-          <div className="mt-3 overflow-x-auto rounded-lg border">
-            <Table>
-              <TableCaption className="px-3 py-2 text-left">
-                Communities are numbered by size. No account is named.
-              </TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-right">Size</TableHead>
-                  <TableHead className="text-right">Internal edges</TableHead>
-                  <TableHead className="text-right">External edges</TableHead>
-                  <TableHead>External ratio</TableHead>
-                  <TableHead>Has member with standing</TableHead>
-                  <TableHead className="text-right">Max core</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {structure.communities.map((c) => (
-                  <TableRow key={c.index}>
-                    <TableCell className="text-right"><Num value={c.size} /></TableCell>
-                    <TableCell className="text-right"><Num value={c.internal_edges} /></TableCell>
-                    <TableCell className="text-right"><Num value={c.external_edges} /></TableCell>
-                    <TableCell><RatioCell value={c.external_edge_ratio} /></TableCell>
-                    <TableCell>{c.contains_seed_member ? "yes" : "no"}</TableCell>
-                    <TableCell className="text-right"><Num value={c.max_core_number} /></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </>
+        </TimeRangeProvider>
+      ) : (
+        <p className="text-muted-foreground text-sm">
+          No activity rollup yet — run <code>bun run activity</code>.
+        </p>
       )}
+
+      <div className="mt-8 grid gap-4 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Does volume predict engagement?</CardTitle>
+          </CardHeader>
+          <CardContent className="text-muted-foreground space-y-2 text-sm">
+            <p className="text-foreground tnum text-2xl font-semibold">
+              {medianBaseline === null
+                ? "not measured"
+                : `${medianBaseline >= 0 ? "+" : ""}${medianBaseline.toFixed(3)}`}
+            </p>
+            <p>
+              Median rank correlation between a thread&apos;s replies last week and its
+              replies the week after.{" "}
+              {medianBaseline !== null && medianBaseline < 0 && (
+                <>
+                  It is <strong>negative</strong>: a thread that was busy is, if anything,
+                  less likely to stay busy. That is the failure mode this project exists to
+                  catch, showing up as a measurement.
+                </>
+              )}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Substance measure</CardTitle>
+          </CardHeader>
+          <CardContent className="text-muted-foreground space-y-2 text-sm">
+            <p className="text-foreground tnum text-2xl font-semibold">no variance</p>
+            <p>
+              The classifier judged {measures.reduce((n, m) => n + m.substantive_replies, 0)}{" "}
+              replies substantive and{" "}
+              {measures.reduce((n, m) => n + m.hollow_replies, 0)} hollow. A measure with no
+              variance carries no information, so it currently adds nothing over counting
+              replies. {unmeasured} threads have no substance measure at all.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Isolated clusters</CardTitle>
+          </CardHeader>
+          <CardContent className="text-muted-foreground space-y-2 text-sm">
+            <p className="text-foreground tnum text-2xl font-semibold">
+              {structure ? structure.communities_without_seed_member.count : "—"}
+            </p>
+            <p>
+              Communities with no member holding community-conferred standing. On this
+              corpus none of them is self-reinforcing — the pattern this project looks for
+              is not present yet.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </SiteShell>
   );
 }

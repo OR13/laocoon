@@ -42,6 +42,14 @@
   --cy-halo: #ffffff;
   --cy-primary: #2a78d6;
   --cy-warn: #8a5a00;
+  /* Categorical slots 1-3 of the validated palette. Only three: past three,
+     an all-pairs chart cannot clear the colour-blind separation floors. */
+  --chart-messages: #2a78d6;
+  --chart-replies: #eb6834;
+  --chart-standing: #1baf7a;
+  --chart-new: #8b8a85;
+  --good: #1a7f4f;
+  --bad: #a33b39;
 }
 
 .dark {
@@ -77,6 +85,12 @@
   --cy-halo: #262624;
   --cy-primary: #3987e5;
   --cy-warn: #d8a24a;
+  --chart-messages: #3987e5;
+  --chart-replies: #d95926;
+  --chart-standing: #199e70;
+  --chart-new: #8d8c84;
+  --good: #5cc08c;
+  --bad: #e88f8d;
 }
 
 @theme inline {

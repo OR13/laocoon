@@ -23,7 +23,8 @@
     "site": "bun run src/cli/site.ts",
     "private-view": "bun run src/cli/private-view.ts",
     "private-serve": "bun run src/cli/private-view.ts --serve",
-    "web:typecheck": "bun --cwd web run typecheck"
+    "web:typecheck": "bun --cwd web run typecheck",
+    "activity": "bun run src/cli/activity.ts"
   },
   "dependencies": {
     "ajv": "^8.17.1",
