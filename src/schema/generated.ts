@@ -412,11 +412,11 @@ export type PrivateEvent = {
    * SHA-256 over canonical JSON of {event_type, payload}. Idempotency key.
    */
   event_id: string;
-  event_type: "SenderResolved" | "DatatrackerRecordFetched" | "MessageClassified";
+  event_type: "SenderResolved" | "DatatrackerRecordFetched" | "MessageClassified" | "ListStewardsFetched";
   schema_version: string;
   observed_at: string;
   source: PrivateSourceRef;
-  payload: SenderResolved | DatatrackerRecordFetched | MessageClassified;
+  payload: SenderResolved | DatatrackerRecordFetched | MessageClassified | ListStewardsFetched;
 };
 
 export interface PrivateSourceRef {
@@ -519,6 +519,49 @@ export interface MessageClassified {
   parent_body_sha256: string;
   classified_at: string;
   duration_ms: number;
+}
+/**
+ * Who currently manages one list: its chairs, area directors and moderators, as the Datatracker reports them.
+ * Distinct from the community-conferred seed on purpose. The seed is *global* standing — chaired any working group, ever — and answers "did anyone established engage". Stewards are *this list's* current role holders and answer "did the people responsible for this discussion engage". A thread with high seed engagement and zero steward engagement is a discussion the people accountable for it have not touched, and merging the two would hide exactly that.
+ * A list may have no stewards at all, which is a fact about the list rather than a gap: a plain mailing list with no IETF group has no chairs to find. `group_found: false` records that, and it is never inferred as absence of oversight.
+ */
+export interface ListStewardsFetched {
+  list_name: string;
+  group_acronym: string;
+  /**
+   * False when the Datatracker has no group by this acronym.
+   */
+  group_found: boolean;
+  group_id?: number | null;
+  /**
+   * e.g. "wg". Empty when no group was found.
+   */
+  group_type?: string;
+  /**
+   * e.g. "bof", "active". Empty when no group was found.
+   */
+  group_state?: string;
+  /**
+   * Name of the group's charter document, or null. A BoF-state group usually has none, which is why charter-derived scope modelling is not available for every list.
+   */
+  charter_document?: string | null;
+  stewards: {
+    /**
+     * Datatracker role slug, e.g. "chair", "ad", "delegate".
+     */
+    role: string;
+    person_id: number;
+    /**
+     * Plaintext, and the reason this log is gitignored.
+     */
+    address: string;
+    /**
+     * Hash of the address, so stewards join to the public log.
+     */
+    sender_id: string;
+  }[];
+  fetched_at: string;
+  endpoints: string[];
 }
 
 // --- reply-graph.yaml ---

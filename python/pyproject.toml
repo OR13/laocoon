@@ -6,6 +6,8 @@ requires-python = ">=3.11"
 dependencies = [
     "networkx>=3.3",
     "scipy>=1.13",
+    "scikit-learn>=1.5",
+    "numpy>=1.26",
 ]
 
 [build-system]

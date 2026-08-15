@@ -164,3 +164,36 @@ export function extractAddress(raw: string | null | undefined): string | null {
   const bare = raw.match(/([^\s<>(),;:"]+@[^\s<>(),;:"]+)/);
   return bare?.[1] ? bare[1].trim().toLowerCase() : null;
 }
+
+/**
+ * Just the text this sender wrote: quotes, the list footer, the signature and
+ * client-generated attribution lines removed.
+ *
+ * Embedding the whole body measures the wrong thing. On the agent2agent corpus
+ * the median reply is 45% quoted lines, and novelty scored over full bodies
+ * correlated -0.32 with how much a reply quoted and only +0.09 with how much new
+ * text it contained — that is a measure of quoting habit, not of contribution.
+ */
+export function newText(text: string): string {
+  const all = text.replace(/\r\n/g, "\n").split("\n");
+  let end = all.length;
+  for (let i = 0; i < all.length; i += 1) {
+    const line = all[i]!;
+    if (
+      LIST_FOOTER_RULE.test(line) ||
+      SIGNATURE_SEPARATOR.test(line) ||
+      ORIGINAL_MESSAGE_HEADER.test(line)
+    ) {
+      end = i;
+      break;
+    }
+  }
+  const kept: string[] = [];
+  for (const line of all.slice(0, end)) {
+    if (QUOTED_LINE.test(line)) continue;
+    const trimmed = line.trim();
+    if (!trimmed || ATTRIBUTION_LINE.test(trimmed)) continue;
+    kept.push(trimmed);
+  }
+  return kept.join("\n");
+}

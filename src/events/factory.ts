@@ -6,6 +6,7 @@ import type {
   DatatrackerRecordFetched,
   Event,
   ForecastEvaluated,
+  ListStewardsFetched,
   MessageClassified,
   MessageObserved,
   ObservationSuperseded,
@@ -67,7 +68,9 @@ type PrivatePayloadFor<T extends PrivateEvent["event_type"]> = T extends "Sender
   ? SenderResolved
   : T extends "DatatrackerRecordFetched"
     ? DatatrackerRecordFetched
-    : MessageClassified;
+    : T extends "MessageClassified"
+      ? MessageClassified
+      : ListStewardsFetched;
 
 /**
  * The private log's constructor. Separate from {@link makeEvent} — not to avoid

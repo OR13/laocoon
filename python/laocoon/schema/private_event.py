@@ -12,6 +12,7 @@ class EventType(StrEnum):
     SenderResolved = 'SenderResolved'
     DatatrackerRecordFetched = 'DatatrackerRecordFetched'
     MessageClassified = 'MessageClassified'
+    ListStewardsFetched = 'ListStewardsFetched'
 
 
 ContentHash: TypeAlias = str
@@ -94,6 +95,34 @@ class MessageClassified:
 
 
 @dataclass
+class Steward:
+    role: str
+    person_id: int
+    address: str
+    sender_id: str
+
+
+@dataclass
+class ListStewardsFetched:
+    """
+    Who currently manages one list: its chairs, area directors and moderators, as the Datatracker reports them.
+    Distinct from the community-conferred seed on purpose. The seed is *global* standing — chaired any working group, ever — and answers "did anyone established engage". Stewards are *this list's* current role holders and answer "did the people responsible for this discussion engage". A thread with high seed engagement and zero steward engagement is a discussion the people accountable for it have not touched, and merging the two would hide exactly that.
+    A list may have no stewards at all, which is a fact about the list rather than a gap: a plain mailing list with no IETF group has no chairs to find. `group_found: false` records that, and it is never inferred as absence of oversight.
+    """
+
+    list_name: str
+    group_acronym: str
+    group_found: bool
+    stewards: list[Steward]
+    fetched_at: str
+    endpoints: list[str]
+    group_id: int | None = None
+    group_type: str | None = None
+    group_state: str | None = None
+    charter_document: str | None = None
+
+
+@dataclass
 class DatatrackerRecordFetched:
     """
     What the datatracker said about one person at one moment. Facts only; the seed rule is applied later, as a projection, so re-deciding the rule never requires re-crawling and never rewrites history.
@@ -122,4 +151,4 @@ class PrivateEvent:
     schema_version: str
     observed_at: str
     source: PrivateSourceRef
-    payload: SenderResolved | DatatrackerRecordFetched | MessageClassified
+    payload: SenderResolved | DatatrackerRecordFetched | MessageClassified | ListStewardsFetched

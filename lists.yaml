@@ -1,0 +1,28 @@
+# The crawled list neighbourhood.
+#
+# PROBLEM.md §7 publishes this: which lists are in scope is a fact a participant
+# should be able to check. It is operational configuration — which mailboxes to
+# open — not analysis, so hand-editing it does not violate §4's no-manual-steps
+# rule. Everything derived *from* a list stays computed.
+#
+# `group_acronym` is the Datatracker group whose current chairs, ADs and
+# moderators steward this discussion. It is looked up, never listed here.
+#
+# Windows are NOT set here. A list's holdout horizon is derived from its own
+# observed thread lifespans, because a list with 1.1-hour threads and one with
+# multi-week threads need different windows and a hand-picked number would be a
+# guess dressed as a policy.
+
+lists:
+  - name: agentproto
+    group_acronym: agentproto
+    description: >-
+      Non-WG list created 2026-07-24 out of the AGENTPROTO BoF. Small and young.
+    enabled: true
+
+  - name: agent2agent
+    group_acronym: agent2agent
+    description: >-
+      Older and substantially larger. Serves as the control corpus: measures that
+      only work on one of these two are measuring the list, not the method.
+    enabled: true

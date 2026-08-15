@@ -24,7 +24,10 @@
     "private-view": "bun run src/cli/private-view.ts",
     "private-serve": "bun run src/cli/private-view.ts --serve",
     "web:typecheck": "bun --cwd web run typecheck",
-    "activity": "bun run src/cli/activity.ts"
+    "activity": "bun run src/cli/activity.ts",
+    "stewards": "bun run src/cli/stewards.ts",
+    "embed": "bun run src/cli/embed.ts",
+    "topics": "bun run src/cli/topics.ts"
   },
   "dependencies": {
     "ajv": "^8.17.1",
