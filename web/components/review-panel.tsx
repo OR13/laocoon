@@ -47,6 +47,16 @@ export function ReviewPanel({ spec }: { spec: ReviewSpec }) {
     window.setTimeout(() => el.classList.remove("review-target"), 2600);
   }, []);
 
+  // Land the reader on the first thing under review. A panel you have to
+  // decide to read becomes documentation you skim.
+  useEffect(() => {
+    if (!open || spec.focus.length === 0) return;
+    const first = spec.focus[0]!;
+    const timer = window.setTimeout(() => focusOn(first), 700);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   // Shift the page rather than overlaying it. A review panel that covers the
   // thing under review is worse than no panel.
   useEffect(() => {
@@ -78,7 +88,7 @@ export function ReviewPanel({ spec }: { spec: ReviewSpec }) {
 
   return (
     <aside
-      className="bg-card fixed top-0 right-0 z-50 flex h-full w-[22rem] flex-col border-l shadow-2xl"
+      className="bg-card fixed top-0 right-0 z-50 flex h-full w-[19rem] flex-col border-l shadow-2xl"
       aria-label="Design review"
     >
       <header className="flex items-start justify-between gap-2 border-b p-4">
@@ -86,8 +96,7 @@ export function ReviewPanel({ spec }: { spec: ReviewSpec }) {
           <div className="text-muted-foreground flex items-center gap-1.5 text-[11px] tracking-wide uppercase">
             <ClipboardCheck className="size-3.5" aria-hidden /> Design review
           </div>
-          <h2 className="mt-1 text-sm leading-snug font-semibold">{spec.title}</h2>
-          <p className="text-muted-foreground mt-0.5 font-mono text-[10px]">{spec.cycle}</p>
+          <h2 className="mt-1 text-[13px] leading-snug font-semibold">{spec.title}</h2>
         </div>
         <button
           onClick={() => setOpen(false)}
@@ -98,10 +107,8 @@ export function ReviewPanel({ spec }: { spec: ReviewSpec }) {
         </button>
       </header>
 
-      <div className="flex-1 overflow-auto p-4 text-sm">
-        <p className="text-muted-foreground leading-snug">{spec.summary}</p>
-
-        <ol className="mt-4 space-y-2">
+      <div className="flex-1 overflow-auto p-3 text-sm">
+        <ol className="space-y-1.5">
           {spec.focus.map((item, index) => (
             <li key={item.id}>
               <button
@@ -112,20 +119,15 @@ export function ReviewPanel({ spec }: { spec: ReviewSpec }) {
                 )}
               >
                 <div className="flex items-start gap-2">
-                  <span className="bg-muted text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold">
+                  <span className="bg-muted text-muted-foreground mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold">
                     {index + 1}
                   </span>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1 text-[13px] font-semibold">
+                    <div className="text-xs leading-snug font-medium">{item.ask}</div>
+                    <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-[11px]">
                       {item.title}
-                      <ChevronRight className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+                      <ChevronRight className="size-3 shrink-0" aria-hidden />
                     </div>
-                    <p className="text-muted-foreground mt-1 text-xs leading-snug">{item.ask}</p>
-                    {item.watch && (
-                      <p className="text-muted-foreground/80 mt-1 text-[11px] italic">
-                        {item.watch}
-                      </p>
-                    )}
                   </div>
                 </div>
               </button>
@@ -134,9 +136,8 @@ export function ReviewPanel({ spec }: { spec: ReviewSpec }) {
         </ol>
       </div>
 
-      <footer className="text-muted-foreground border-t p-3 text-[11px] leading-snug">
-        Click an item to scroll to it and highlight it. Escape closes the panel; the
-        tab on the right brings it back.
+      <footer className="text-muted-foreground border-t px-3 py-2 text-[10px]">
+        Click to jump. Esc closes.
       </footer>
     </aside>
   );

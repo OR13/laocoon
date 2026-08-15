@@ -7,9 +7,11 @@ import type { GraphSource } from "@/lib/graph-model";
 import { archiveListUrl, archiveMessageUrl } from "@/lib/archive";
 import { loadPublic, loadReview } from "@/lib/data";
 import { ReviewPanel } from "@/components/review-panel";
+import { ContributionCard } from "@/components/contribution-card";
 
 export default async function OverviewPage() {
-  const { activity, windows, structure, forecasts, measures, trees, health } = await loadPublic();
+  const { activity, windows, structure, forecasts, measures, trees, health, contribution } =
+    await loadPublic();
   const review = await loadReview();
 
   // The list with a usable topic partition leads. agentproto's 23 threads are
@@ -62,6 +64,7 @@ export default async function OverviewPage() {
             .sort((a, b) => a - b);
           return {
             ...topic,
+            list_name: topic.list_name,
             label: topic.label ? `${topic.label}` : null,
             median_novelty: vals.length ? vals[Math.floor(vals.length / 2)]! : null,
           };
@@ -70,6 +73,7 @@ export default async function OverviewPage() {
           id: th.id,
           topic_id: topicOfThread.get(th.id) ?? null,
           subject: th.subject,
+          list_name: th.list_name,
           gist: th.gist,
           href: archiveMessageUrl(th.id, th.list_name),
           message_count: th.message_count,
@@ -163,6 +167,10 @@ export default async function OverviewPage() {
           No activity rollup yet — run <code>bun run activity</code>.
         </p>
       )}
+
+      {contribution.map((c) => (
+        <ContributionCard key={c.list_name} data={c} />
+      ))}
 
       {health.length > 0 && (
         <Card className="mt-6" data-review="axes">

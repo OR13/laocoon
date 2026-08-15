@@ -44,6 +44,12 @@
   --cy-warn: #8a5a00;
   /* Categorical slots 1-3 of the validated palette. Only three: past three,
      an all-pairs chart cannot clear the colour-blind separation floors. */
+  /* One hue family per list. Slots 1 and 2 of the validated categorical
+     palette, stepped: hue distinguishes the list, step within it carries
+     novelty. Two families only — a third list needs a re-check, because past
+     three categorical hues an all-pairs view cannot clear the CVD floors. */
+  --l1-100: #cde2fb; --l1-300: #6da7ec; --l1-500: #256abf; --l1-700: #0d366b;
+  --l2-100: #fbd9c8; --l2-300: #f0995f; --l2-500: #c9531f; --l2-700: #7a2f0e;
   --chart-messages: #2a78d6;
   --chart-replies: #eb6834;
   --chart-standing: #1baf7a;
@@ -86,6 +92,8 @@
   --cy-halo: #262624;
   --cy-primary: #3987e5;
   --cy-warn: #d8a24a;
+  --l1-100: #0d366b; --l1-300: #184f95; --l1-500: #3987e5; --l1-700: #9ec5f4;
+  --l2-100: #4a1d09; --l2-300: #8c3a13; --l2-500: #d95926; --l2-700: #f5b48c;
   --chart-messages: #3987e5;
   --chart-replies: #d95926;
   --chart-standing: #199e70;
@@ -137,7 +145,7 @@
 }
 
 /* The page makes room for the review panel instead of sitting under it. */
-body.review-open { padding-right: 22rem; }
+body.review-open { padding-right: 19rem; }
 @media (max-width: 80rem) { body.review-open { padding-right: 0; } }
 
 /* Design-review highlight. A ring rather than a fill, so the highlighted

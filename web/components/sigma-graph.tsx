@@ -59,6 +59,16 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
   const [unsupported, setUnsupported] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
+  // One ramp per list. Hue says which list, position along the ramp says
+  // novelty — so the two lists stay distinguishable no matter what else is
+  // encoded, and a reader is never left guessing which corpus a node is from.
+  const RAMPS: Record<string, string[]> = useMemo(
+    () => ({
+      agentproto: ["--l1-100", "--l1-300", "--l1-500", "--l1-700"],
+      agent2agent: ["--l2-100", "--l2-300", "--l2-500", "--l2-700"],
+    }),
+    [],
+  );
   const palette = useMemo(
     () => ({
       ramp: ["--seq-100", "--seq-250", "--seq-400", "--seq-550", "--seq-700"],
@@ -72,21 +82,23 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
   const paint = useCallback(() => {
     const graph = graphRef.current;
     if (!graph) return;
-    const ramp = palette.ramp.map(cssVar);
+    const fallback = palette.ramp.map(cssVar);
     const threadColour = cssVar(palette.thread) || "#8b8a85";
     graph.forEachNode((key, attrs) => {
       const tier = attrs.tier as Tier;
       const intensity = (attrs.intensity ?? null) as number | null;
+      const list = attrs.list as string | undefined;
+      const ramp = (list && RAMPS[list]?.map(cssVar)) || fallback;
       // No health colouring: the state that drove it inverted against
       // engagement on both lists and was removed. Threads are neutral; the
       // three axes live in the panel where their values are visible.
       graph.setNodeAttribute(
         key,
         "color",
-        tier === "thread" ? threadColour : rampColour(intensity, ramp, threadColour),
+        rampColour(intensity, ramp, tier === "thread" ? threadColour : ramp[1]!),
       );
     });
-  }, [palette]);
+  }, [palette, RAMPS]);
 
   useEffect(() => {
     if (!boxRef.current) return;
@@ -121,6 +133,7 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
         intensity: n.intensity,
         standing: n.standing ?? "none",
         cluster: n.cluster,
+        list: n.list ?? "",
         gist: n.gist ?? "",
         size: min + span * Math.sqrt(n.weight / (maxByTier.get(n.tier) ?? 1)),
         // Shape carries node type so the tiers survive greyscale.

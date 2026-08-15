@@ -243,6 +243,29 @@ export interface Health {
   }[];
 }
 
+export interface Contribution {
+  publication: string;
+  list_name: string;
+  replies_examined: number;
+  replies_that_drew_standing_engagement: number;
+  quiet_thread_threshold: number;
+  what_works: Record<string, { with: number | null; without: number | null; delta: number | null }>;
+  buried: ContributionMessage[];
+  newcomer_wins: ContributionMessage[];
+}
+
+export interface ContributionMessage {
+  message_id: string;
+  thread_id: string;
+  sent_at: string | null;
+  gist: string;
+  authored_lines: number;
+  novelty: number | null;
+  replies: number;
+  replies_from_standing: number;
+  thread_messages: number;
+}
+
 export interface PublicData {
   measures: ThreadMeasure[];
   forecasts: Forecast[];
@@ -252,6 +275,7 @@ export interface PublicData {
   topics: TopicsArtifact[];
   trees: TopicTree[];
   health: Health[];
+  contribution: Contribution[];
 }
 
 export interface CommunityStructure {
@@ -372,7 +396,23 @@ export async function loadPublic(): Promise<PublicData> {
     }
   }
 
+  const contribution: Contribution[] = [];
+  for (const list of ["agentproto", "agent2agent"]) {
+    try {
+      const raw = JSON.parse(
+        await readFile(join(ARTIFACTS_DIR, `contribution-${list}.json`), "utf8"),
+      ) as Contribution;
+      if (raw.publication !== "aggregate_public") {
+        throw new Error(`refusing contribution-${list}.json: publication is ${raw.publication}`);
+      }
+      contribution.push(raw);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("refusing")) throw error;
+    }
+  }
+
   return {
+    contribution,
     health,
     trees,
     topics,

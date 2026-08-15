@@ -41,6 +41,9 @@ export interface GraphNode {
   standing?: "steward" | "seed" | "none";
   /** Topic this node belongs to. Drives spatial clustering in the layout. */
   cluster: string;
+  /** Which list this belongs to. Carried as its own channel so the two are
+   *  always distinguishable, however else a node is encoded. */
+  list?: string;
   gist?: string;
   href?: string;
   reach?: number;
@@ -75,11 +78,12 @@ export interface TopicRow {
 }
 
 export interface GraphSource {
-  topics: TopicRow[];
+  topics: (TopicRow & { list_name?: string })[];
   threads: {
     id: string;
     topic_id: string | null;
     subject: string;
+    list_name?: string;
     gist?: string;
     href?: string;
     message_count: number;
@@ -161,6 +165,7 @@ export function buildView(
       weight: topic.message_count,
       intensity: topicNovelty(topic.median_novelty),
       cluster: topic.id,
+      list: topic.list_name,
       ref: topic.id,
     });
     if (!expandedTopics.has(topic.id)) continue;
@@ -191,6 +196,7 @@ export function buildView(
       weight: thread.message_count,
       intensity: threadNovelty(thread.median_novelty),
       cluster: thread.topic_id ?? "unassigned",
+      list: thread.list_name,
       gist: thread.gist,
       href: thread.href,
       reach: thread.reach,
