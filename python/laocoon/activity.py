@@ -162,31 +162,76 @@ def main() -> int:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--model", default="gemma4:12b")
     parser.add_argument("--new-participant-window-days", type=int, default=14)
-    parser.add_argument("--list", dest="list_name", default="agentproto")
+    parser.add_argument("--list", dest="lists", action="append", required=True)
     args = parser.parse_args()
 
     seed_doc = json.loads(args.seed.read_text(encoding="utf-8"))
     seed_ids = {m["sender_id"] for m in seed_doc["members"]}
 
-    state = replay(args.events, {args.list_name})
-    graph = build(state.messages)
-    body_of = {m["message_id"]: m["body"]["sha256"] for m in state.messages if m["message_id"]}
-    verdicts = (
-        load_verdicts(args.private_events, args.model) if args.private_events else {}
-    )
+    verdicts = load_verdicts(args.private_events, args.model) if args.private_events else {}
 
-    first_seen: dict[str, datetime] = {}
-    for m in state.messages:
-        if not m["sent_at"]:
-            continue
-        sent = parse_time(m["sent_at"])
-        if m["sender_id"] not in first_seen or sent < first_seen[m["sender_id"]]:
-            first_seen[m["sender_id"]] = sent
+    per_list: dict[str, Any] = {}
+    senders_by_list: dict[str, set[str]] = {}
+    for name in args.lists:
+        s = replay(args.events, {name})
+        g = build(s.messages)
+        bodies = {m["message_id"]: m["body"]["sha256"] for m in s.messages if m["message_id"]}
+        first: dict[str, datetime] = {}
+        for m in s.messages:
+            if not m["sent_at"]:
+                continue
+            when = parse_time(m["sent_at"])
+            if m["sender_id"] not in first or when < first[m["sender_id"]]:
+                first[m["sender_id"]] = when
+        per_list[name] = {
+            "daily": daily_series(
+                g, verdicts, bodies, seed_ids, first, args.new_participant_window_days
+            ),
+            "thread_graph": thread_graph(g, seed_ids),
+            "messages": len(s.messages),
+            "threads": len(g["threads"]),
+            "senders": len({m["sender_id"] for m in s.messages}),
+        }
+        senders_by_list[name] = {m["sender_id"] for m in s.messages}
 
-    series = daily_series(
-        graph, verdicts, body_of, seed_ids, first_seen, args.new_participant_window_days
-    )
-    threads = thread_graph(graph, seed_ids)
+    # Cross-list overlap. Counts only — the join is by hashed sender, and no
+    # identifier appears in the artifact.
+    names = list(senders_by_list)
+    union: set[str] = set().union(*senders_by_list.values()) if senders_by_list else set()
+    overlap = {
+        "distinct_people": len(union),
+        "on_more_than_one_list": sum(
+            1 for p in union if sum(1 for s in senders_by_list.values() if p in s) > 1
+        ),
+        "per_list": {n: len(s) for n, s in senders_by_list.items()},
+        "pairs": [
+            {
+                "lists": [a, b],
+                "shared": len(senders_by_list[a] & senders_by_list[b]),
+                "share_of_" + a: round(
+                    len(senders_by_list[a] & senders_by_list[b]) / max(1, len(senders_by_list[a])), 4
+                ),
+                "share_of_" + b: round(
+                    len(senders_by_list[a] & senders_by_list[b]) / max(1, len(senders_by_list[b])), 4
+                ),
+            }
+            for i, a in enumerate(names)
+            for b in names[i + 1 :]
+        ],
+    }
+
+    # Combined daily series: one row per day, summed across lists.
+    combined: dict[str, dict[str, Any]] = {}
+    for name, data in per_list.items():
+        for row in data["daily"]:
+            acc = combined.setdefault(row["day"], {"day": row["day"]})
+            for key, value in row.items():
+                if key == "day" or value is None:
+                    continue
+                if key == "substantive_ratio":
+                    continue
+                acc[key] = acc.get(key, 0) + value
+    series = [combined[d] for d in sorted(combined)]
 
     artifact = {
         "schema_version": "1.0.0",
@@ -196,11 +241,15 @@ def main() -> int:
         .isoformat(timespec="seconds")
         .replace("+00:00", "Z"),
         "generator": GENERATOR,
-        "list_name": args.list_name,
+        "lists": args.lists,
         "seed_rule_version": seed_doc["seed_rule_version"],
         "new_participant_window_days": args.new_participant_window_days,
         "daily": series,
-        "thread_graph": threads,
+        "per_list": {
+            n: {k: v for k, v in d.items() if k != "thread_graph"} for n, d in per_list.items()
+        },
+        "cross_list": overlap,
+        "thread_graph": per_list[args.lists[0]]["thread_graph"],
     }
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -209,10 +258,10 @@ def main() -> int:
         json.dumps(
             {
                 "out": str(args.out),
+                "lists": args.lists,
                 "days": len(series),
-                "thread_nodes": len(threads["nodes"]),
-                "thread_edges": len(threads["edges"]),
                 "messages": sum(d["messages"] for d in series),
+                "cross_list": overlap,
             },
             indent=2,
         )

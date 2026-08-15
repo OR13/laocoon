@@ -1,0 +1,43 @@
+{
+  "cycle": "2026-08-15-combined",
+  "pending": true,
+  "title": "Combined picture: agentproto + agent2agent",
+  "summary": "Both lists are now shown together rather than one standing in for the other. Topics from every list share one graph, activity is summed with a per-list split, and thread axes are reported per list because pooling them is exactly how a 15-origin finding from a three-week-old list became a claim about the method.",
+  "focus": [
+    {
+      "id": "cross-list",
+      "target": "[data-review='cross-list']",
+      "title": "79% of agentproto also posts on agent2agent",
+      "ask": "22 of 28. Does that change what agentproto is to you — a new venue for the same people rather than a new audience?",
+      "watch": "The per-list chips and the cross-list count sit above the tiles."
+    },
+    {
+      "id": "combined-volume",
+      "target": "[data-review='volume']",
+      "title": "Volume is now summed across both lists",
+      "ask": "The window still defaults to 7 days. With one list 483 days old and the other 22, is a shared window useful, or do you want the range per list?",
+      "watch": "Compare the combined line against the per-list chips — agent2agent dominates."
+    },
+    {
+      "id": "topics",
+      "target": "[data-review='topics']",
+      "title": "One graph, topics from both lists",
+      "ask": "agentproto contributes zero topics because the blob cap refuses to split its 23 threads. Should its threads still appear in the graph as unassigned, or is a list with no topics better left out entirely?",
+      "watch": "Expand a topic — the layout animates rather than jumping. Clusters are seeded apart before the force pass."
+    },
+    {
+      "id": "axes",
+      "target": "[data-review='axes']",
+      "title": "Thread axes, per list, with the withdrawn verdict stated",
+      "ask": "The open/narrow/closed label inverted and was removed. Is stating the removal on the page right, or does an admission of a withdrawn measure belong only in the docs?",
+      "watch": "Reach differs sharply between the lists. Uptake medians are close."
+    },
+    {
+      "id": "findings",
+      "target": "[data-review='findings']",
+      "title": "Nothing beats counting replies",
+      "ask": "On agent2agent's 159 origins the baseline wins: +0.462 against novelty's +0.419 and standing's +0.403. Does that change what you want built next, or is the corpus still too small to act on?",
+      "watch": "The three cards below the graph."
+    }
+  ]
+}

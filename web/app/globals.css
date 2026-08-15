@@ -135,3 +135,20 @@
   body { @apply bg-background text-foreground; font-variant-numeric: tabular-nums; }
   .tnum { font-variant-numeric: tabular-nums; }
 }
+
+/* The page makes room for the review panel instead of sitting under it. */
+body.review-open { padding-right: 22rem; }
+@media (max-width: 80rem) { body.review-open { padding-right: 0; } }
+
+/* Design-review highlight. A ring rather than a fill, so the highlighted
+   section keeps its own palette and the marker reads in both themes. */
+.review-target {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+  border-radius: var(--radius-lg);
+  animation: review-pulse 2.4s ease-out;
+}
+@keyframes review-pulse {
+  0%, 100% { outline-color: transparent; }
+  15%, 70% { outline-color: var(--ring); }
+}

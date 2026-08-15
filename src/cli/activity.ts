@@ -11,7 +11,13 @@
  */
 import { join } from "node:path";
 import { assertNoSenderHash } from "../site/publishable.ts";
+import { parse as parseYaml } from "yaml";
 import { ARTIFACTS_DIR, PRIVATE_DIR, repoPath } from "../lib/paths.ts";
+
+const config = parseYaml(await Bun.file(repoPath("lists.yaml")).text()) as {
+  lists: { name: string; enabled: boolean }[];
+};
+const lists = config.lists.filter((l) => l.enabled);
 
 const seedPath = join(PRIVATE_DIR, "artifacts", "seed.json");
 if (!(await Bun.file(seedPath).exists())) throw new Error(`no ${seedPath}: run \`bun run seed\``);
@@ -25,6 +31,7 @@ const proc = Bun.spawn(
     "--private-events", join(PRIVATE_DIR, "events"),
     "--seed", seedPath,
     "--out", out,
+    ...lists.flatMap((l) => ["--list", l.name]),
   ],
   { stdout: "inherit", stderr: "inherit" },
 );

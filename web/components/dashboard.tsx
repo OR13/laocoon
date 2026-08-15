@@ -92,9 +92,8 @@ const peopleConfig = {
 } satisfies ChartConfig;
 
 export function Dashboard({ activity }: { activity: Activity }) {
-  // The list this rollup covers is named on the page, because the topic and
-  // health sections below may be showing a different one — agentproto has no
-  // usable topic partition, so those fall through to agent2agent.
+  // Combined across every crawled list, with the per-list split available so a
+  // number is never silently one list standing in for all of them.
   const { days } = useTimeRange();
   const { current, previous } = useMemo(
     () => splitWindow(activity.daily, days),
@@ -128,12 +127,30 @@ export function Dashboard({ activity }: { activity: Activity }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-muted-foreground text-sm">
-          <strong className="text-foreground">{activity.list_name}</strong> —{" "}
+          <strong className="text-foreground">{activity.lists.join(" + ")}</strong> —{" "}
           <strong className="text-foreground">{rangeLabel}</strong>
           {current.length > 0 && <> — {from} to {to}</>}. Deltas compare with the
           equally long window immediately before.
         </p>
         <TimeRangePicker />
+      </div>
+
+      <div className="text-muted-foreground flex flex-wrap gap-4 text-xs" data-review="cross-list">
+        {activity.lists.map((name) => {
+          const l = activity.per_list[name];
+          const rows = splitWindow(l?.daily ?? [], days).current;
+          return (
+            <span key={name} className="rounded-md border px-2 py-1">
+              <strong className="text-foreground">{name}</strong>{" "}
+              {sum(rows, "messages")} msgs in window · {l?.messages ?? 0} total ·{" "}
+              {l?.senders ?? 0} senders
+            </span>
+          );
+        })}
+        <span className="rounded-md border px-2 py-1">
+          <strong className="text-foreground">{activity.cross_list.on_more_than_one_list}</strong>{" "}
+          of {activity.cross_list.distinct_people} people post on more than one list
+        </span>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -155,12 +172,14 @@ export function Dashboard({ activity }: { activity: Activity }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card data-review="volume">
           <CardHeader>
-            <CardTitle className="text-base">Volume</CardTitle>
+            <CardTitle className="text-base">Volume — all lists</CardTitle>
             <CardDescription>
-              Messages and replies per day. Volume is the thing this project treats
-              with suspicion, not the thing it rewards.
+              Messages and replies per day, summed across {activity.lists.length} lists.
+              Volume is the thing this project treats with suspicion, not the thing it
+              rewards — on the larger list it is also the best predictor of what happens
+              next, which nothing model-derived has yet beaten.
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -11,7 +11,7 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ARTIFACTS_DIR, EVENTS_DIR, IS_PRIVATE_BUILD, PRIVATE_DIR } from "./paths";
+import { ARTIFACTS_DIR, EVENTS_DIR, IS_PRIVATE_BUILD, PRIVATE_DIR, repoPath } from "./paths";
 
 export const PUBLISHABLE_EVENT_TYPES = [
   "ThreadMeasured",
@@ -132,10 +132,19 @@ export interface ThreadNode {
   last_message_at: string | null;
 }
 
+export interface CrossList {
+  distinct_people: number;
+  on_more_than_one_list: number;
+  per_list: Record<string, number>;
+  pairs: Record<string, unknown>[];
+}
+
 export interface Activity {
   publication: string;
   generated_at: string;
-  list_name: string;
+  lists: string[];
+  per_list: Record<string, { daily: DailyRow[]; messages: number; threads: number; senders: number }>;
+  cross_list: CrossList;
   daily: DailyRow[];
   thread_graph: {
     nodes: ThreadNode[];
@@ -496,4 +505,19 @@ export async function loadPrivate(): Promise<PrivateData> {
     participation: raw.participation,
     replies: raw.replies,
   };
+}
+
+
+/**
+ * The current design-review spec, if one is pending.
+ *
+ * Committed alongside the change it describes, so review notes and the code
+ * they point at cannot drift apart.
+ */
+export async function loadReview(): Promise<import("@/components/review-panel").ReviewSpec | null> {
+  try {
+    return JSON.parse(await readFile(repoPath("review.json"), "utf8"));
+  } catch {
+    return null;
+  }
 }

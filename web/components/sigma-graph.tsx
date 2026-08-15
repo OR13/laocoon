@@ -19,6 +19,7 @@ import Graph from "graphology";
 import Sigma from "sigma";
 import { NodeSquareProgram } from "@sigma/node-square";
 import forceAtlas2 from "graphology-layout-forceatlas2";
+import { animateNodes } from "sigma/utils";
 import { useTheme } from "next-themes";
 import type { GraphEdge, GraphNode, GraphView, Tier } from "@/lib/graph-model";
 
@@ -49,6 +50,9 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
   const boxRef = useRef<HTMLDivElement>(null);
   const sigmaRef = useRef<Sigma | null>(null);
   const graphRef = useRef<Graph | null>(null);
+  /** Where each node sat last render, so an expand eases instead of jumping. */
+  const lastPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const cancelAnimation = useRef<(() => void) | null>(null);
   const { resolvedTheme } = useTheme();
   const [stats, setStats] = useState("");
   const [hovered, setHovered] = useState<string | null>(null);
@@ -149,6 +153,14 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
       }),
     );
     graph.forEachNode((key, attrs) => {
+      // A node that was already on screen starts where it was, so the force
+      // pass moves it from its old position rather than teleporting it.
+      const previous = lastPositions.current.get(key);
+      if (previous) {
+        graph.setNodeAttribute(key, "x", previous.x);
+        graph.setNodeAttribute(key, "y", previous.y);
+        return;
+      }
       const anchor = ring.get(attrs.cluster as string) ?? { x: 0, y: 0 };
       graph.setNodeAttribute(key, "x", anchor.x + (Math.random() - 0.5) * 2.5);
       graph.setNodeAttribute(key, "y", anchor.y + (Math.random() - 0.5) * 2.5);
@@ -166,6 +178,19 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
       });
     }
     const layoutMs = Math.round(performance.now() - started);
+
+    // Settle to the computed positions rather than snapping to them. Nodes that
+    // were already on screen keep their identity across an expand, which is the
+    // difference between "the graph changed" and "a different graph appeared".
+    const target = new Map<string, { x: number; y: number }>();
+    graph.forEachNode((key, attrs) => {
+      target.set(key, { x: attrs.x as number, y: attrs.y as number });
+      const previous = lastPositions.current.get(key);
+      if (previous) {
+        graph.setNodeAttribute(key, "x", previous.x);
+        graph.setNodeAttribute(key, "y", previous.y);
+      }
+    });
 
     graphRef.current = graph;
     try {
@@ -191,6 +216,17 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
     renderer.refresh();
     setStats(`${graph.order} nodes, ${graph.size} edges · layout ${layoutMs} ms`);
 
+    cancelAnimation.current?.();
+    cancelAnimation.current = animateNodes(
+      graph,
+      Object.fromEntries(target),
+      { duration: 520, easing: "quadraticInOut" },
+      () => {
+        lastPositions.current = target;
+        cancelAnimation.current = null;
+      },
+    );
+
     renderer.on("clickNode", ({ node }) => {
       const found = view.nodes.find((n) => n.key === node) ?? null;
       onSelect?.(found);
@@ -200,6 +236,12 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
     renderer.on("leaveNode", () => setHovered(null));
 
     return () => {
+      cancelAnimation.current?.();
+      cancelAnimation.current = null;
+      // Keep the last known positions so the next view animates from them.
+      graph.forEachNode((key, attrs) => {
+        lastPositions.current.set(key, { x: attrs.x as number, y: attrs.y as number });
+      });
       renderer.kill();
       sigmaRef.current = null;
       graphRef.current = null;
