@@ -1,0 +1,121 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Palette: stone neutrals plus the validated blue sequential ramp from the
+   project's data-viz reference. Sequential because reputation is a magnitude;
+   one hue because a rainbow would imply categories that are not there. */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.994 0.002 106);
+  --foreground: oklch(0.147 0.004 49);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.147 0.004 49);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.147 0.004 49);
+  --primary: oklch(0.53 0.15 254);
+  --primary-foreground: oklch(0.985 0.001 106);
+  --secondary: oklch(0.97 0.001 106);
+  --secondary-foreground: oklch(0.216 0.006 56);
+  --muted: oklch(0.97 0.001 106);
+  --muted-foreground: oklch(0.553 0.013 58);
+  --accent: oklch(0.97 0.001 106);
+  --accent-foreground: oklch(0.216 0.006 56);
+  --destructive: oklch(0.577 0.245 27);
+  --border: oklch(0.923 0.003 48);
+  --input: oklch(0.923 0.003 48);
+  --ring: oklch(0.53 0.15 254);
+  --warn: oklch(0.52 0.1 75);
+  --warn-bg: oklch(0.97 0.03 88);
+  --seq-100: #cde2fb;
+  --seq-250: #86b6ef;
+  --seq-400: #3987e5;
+  --seq-550: #1c5cab;
+  --seq-700: #0d366b;
+  --thread-bg: #eceae4;
+  --thread-line: #8b8a85;
+  /* Canvas-safe duplicates. Cytoscape renders to 2D canvas and cannot parse
+     oklch(), which it silently treats as black — feeding it the theme tokens
+     directly paints every label as a solid blob. */
+  --cy-ink: #1c1917;
+  --cy-halo: #ffffff;
+  --cy-primary: #2a78d6;
+  --cy-warn: #8a5a00;
+}
+
+.dark {
+  --background: oklch(0.147 0.004 49);
+  --foreground: oklch(0.985 0.001 106);
+  --card: oklch(0.216 0.006 56);
+  --card-foreground: oklch(0.985 0.001 106);
+  --popover: oklch(0.216 0.006 56);
+  --popover-foreground: oklch(0.985 0.001 106);
+  --primary: oklch(0.65 0.15 254);
+  --primary-foreground: oklch(0.147 0.004 49);
+  --secondary: oklch(0.268 0.007 34);
+  --secondary-foreground: oklch(0.985 0.001 106);
+  --muted: oklch(0.268 0.007 34);
+  --muted-foreground: oklch(0.709 0.01 56);
+  --accent: oklch(0.268 0.007 34);
+  --accent-foreground: oklch(0.985 0.001 106);
+  --destructive: oklch(0.704 0.191 22);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.65 0.15 254);
+  --warn: oklch(0.78 0.11 78);
+  --warn-bg: oklch(0.26 0.04 70);
+  /* Dark steps of the same ramp: more colour still means more reputation. */
+  --seq-100: #0d366b;
+  --seq-250: #184f95;
+  --seq-400: #256abf;
+  --seq-550: #3987e5;
+  --seq-700: #9ec5f4;
+  --thread-bg: #3b3b36;
+  --thread-line: #b0aea4;
+  --cy-ink: #f5f5f4;
+  --cy-halo: #262624;
+  --cy-primary: #3987e5;
+  --cy-warn: #d8a24a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+  }
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body { @apply bg-background text-foreground; font-variant-numeric: tabular-nums; }
+  .tnum { font-variant-numeric: tabular-nums; }
+}

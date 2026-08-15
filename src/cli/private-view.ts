@@ -1,44 +1,51 @@
 #!/usr/bin/env bun
 /**
- * The operator's private view: named senders, who replied to whom, and which
- * threads each took part in.
+ * Build the operator's private view.
  *
  *   bun run private-view
  *
- * **This is the one view that names people.** PROBLEM.md section 7 makes
- * per-person data private *to Orie* — private, not nonexistent. The published
- * dashboard shows counts; this shows the individuals behind them, because that
- * is what the operator needs to actually read the list.
+ * Recomputes the graph data, then runs `next build` with LAOCOON_PRIVATE=1 —
+ * which is the only condition under which the private page's file counts as a
+ * route — and copies the export to `private/views/`.
  *
- * Three things keep it from leaking:
- *   * it is written under `private/`, and refuses to write anywhere else;
- *   * `private/` is gitignored, and the site build reads only the public log;
- *   * the source artifact declares `publication: private`, which the site
- *     build rejects on sight.
+ * **This is the one view that names people.** PROBLEM.md §7 makes per-person
+ * data private *to Orie*: private, not nonexistent. The published dashboard
+ * shows counts; this shows the individuals behind them, because that is what
+ * the operator needs to actually read the list.
  *
- * Names come from `private/senders.jsonl`, the local address book that
- * ingestion writes and that never enters the public log.
+ * It cannot escape: it is written under `private/` and this command refuses any
+ * other path, `private/` is gitignored, and the public build has no such route.
+ *
+ * `--serve` starts a local static server and prints the URL. A Next export
+ * references its assets from the site root, so opening the HTML directly with
+ * `file://` loads no CSS and no JavaScript — the page appears as unstyled text
+ * with no graph. Serving is not a convenience here, it is how the page works.
+ * The server binds to loopback only.
  */
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { cp, mkdir, rm } from "node:fs/promises";
+import { join, normalize } from "node:path";
+import { parseArgs } from "node:util";
 import { PRIVATE_DIR, repoPath } from "../lib/paths.ts";
-import { escapeHtml } from "../site/render.ts";
-import { renderPrivateView, type SenderView } from "../site/private-render.ts";
 
-const artifactPath = join(PRIVATE_DIR, "artifacts", "sender-view.json");
-const seedPath = join(PRIVATE_DIR, "artifacts", "seed.json");
-const outPath = join(PRIVATE_DIR, "views", "senders.html");
+const { values } = parseArgs({
+  options: { serve: { type: "boolean", default: false }, port: { type: "string", default: "4173" } },
+});
 
-if (!outPath.startsWith(PRIVATE_DIR + "/")) {
-  throw new Error(`refusing to write a named-participant view outside private/: ${outPath}`);
+const WEB = repoPath("web");
+const EXPORT = join(WEB, ".next-private");
+const OUT = join(PRIVATE_DIR, "views");
+
+if (!OUT.startsWith(PRIVATE_DIR + "/")) {
+  throw new Error(`refusing to write a named-participant view outside private/: ${OUT}`);
 }
 
+const seedPath = join(PRIVATE_DIR, "artifacts", "seed.json");
 if (!(await Bun.file(seedPath).exists())) {
   throw new Error(`no ${seedPath}: run \`bun run seed\` first`);
 }
 
-// Recompute the view data so it always matches the current log.
-const proc = Bun.spawn(
+// Recompute the graph data so the page always matches the current log.
+const data = Bun.spawn(
   [
     "uv", "run", "--quiet", "--directory", repoPath("python"),
     "python", "-m", "laocoon.private_view",
@@ -46,61 +53,65 @@ const proc = Bun.spawn(
     "--seed", seedPath,
     "--reputation", join(PRIVATE_DIR, "artifacts", "reputation.json"),
     "--measures", repoPath("artifacts", "thread-measures.json"),
-    "--out", artifactPath,
+    "--out", join(PRIVATE_DIR, "artifacts", "sender-view.json"),
   ],
-  { stdout: "pipe", stderr: "inherit" },
+  { stdout: "inherit", stderr: "inherit" },
 );
-if ((await proc.exited) !== 0) throw new Error("laocoon.private_view failed");
+if ((await data.exited) !== 0) throw new Error("laocoon.private_view failed");
 
-const view = (await Bun.file(artifactPath).json()) as SenderView;
-if (view.publication !== "private") {
-  throw new Error(`sender view is not marked private: ${artifactPath}`);
+const build = Bun.spawn(["bun", "run", "build"], {
+  cwd: WEB,
+  env: { ...process.env, LAOCOON_PRIVATE: "1" },
+  stdout: "inherit",
+  stderr: "inherit",
+});
+if ((await build.exited) !== 0) throw new Error("next build (private) failed");
+
+const page = join(EXPORT, "private", "graph", "index.html");
+if (!(await Bun.file(page).exists())) {
+  throw new Error(`private build produced no ${page}`);
 }
 
-/** sender_id -> the best display name we have, from the local address book. */
-const names = new Map<string, { name: string; address: string }>();
-const book = Bun.file(join(PRIVATE_DIR, "senders.jsonl"));
-if (await book.exists()) {
-  for (const line of (await book.text()).split("\n")) {
-    if (!line.trim()) continue;
-    const r = JSON.parse(line) as { sender_id: string; address: string; display_name: string };
-    const existing = names.get(r.sender_id);
-    // Prefer a record that actually has a display name.
-    if (!existing || (!existing.name && r.display_name)) {
-      names.set(r.sender_id, { name: r.display_name, address: r.address });
-    }
+await rm(OUT, { recursive: true, force: true });
+await mkdir(OUT, { recursive: true });
+await cp(EXPORT, OUT, { recursive: true });
+
+const entry = join(OUT, "private", "graph", "index.html");
+console.log(JSON.stringify({ out: entry }, null, 2));
+console.log(
+  `\nPRIVATE. Named participants. gitignored, never published, and the public ` +
+    `build has no such route.`,
+);
+
+if (values.serve) {
+  const handler = {
+    hostname: "127.0.0.1", // loopback only: this page names people
+    async fetch(request: Request) {
+      const url = new URL(request.url);
+      // normalize() collapses any ".." before it can climb out of OUT.
+      const rel = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, "");
+      for (const candidate of [join(OUT, rel), join(OUT, rel, "index.html")]) {
+        if (!candidate.startsWith(OUT)) continue;
+        const file = Bun.file(candidate);
+        if (await file.exists()) {
+          const stat = await file.stat();
+          if (!stat.isDirectory()) return new Response(file);
+        }
+      }
+      return new Response("not found", { status: 404 });
+    },
+  } as const;
+
+  // Prefer the requested port so a bookmark keeps working, but fall back to an
+  // OS-assigned one rather than failing because something else holds it.
+  let server;
+  try {
+    server = Bun.serve({ ...handler, port: Number(values.port) });
+  } catch {
+    server = Bun.serve({ ...handler, port: 0 });
+    console.warn(`port ${values.port} was busy; using ${server.port} instead`);
   }
-}
-
-// Cytoscape and fCoSE are bundled into the page. The view must open from disk
-// with no server and no network, so nothing is loaded from a CDN.
-const bundlePath = repoPath("src", "site", "vendor", "graph-bundle.js");
-if (!(await Bun.file(bundlePath).exists())) {
-  throw new Error(
-    `no ${bundlePath}: run \`bun run bundle:graph\` (bun build of src/site/vendor/graph-bundle.entry.ts)`,
+  console.log(
+    `\nServing on http://127.0.0.1:${server.port}/private/graph/  (Ctrl-C to stop)`,
   );
 }
-const bundle = await Bun.file(bundlePath).text();
-const html = renderPrivateView(view, names, escapeHtml, bundle);
-await mkdir(join(PRIVATE_DIR, "views"), { recursive: true });
-await Bun.write(outPath, html);
-
-const named = view.persons.filter((p) => names.has(p.id)).length;
-console.log(
-  JSON.stringify(
-    {
-      out: outPath,
-      persons: view.persons.length,
-      with_a_name: named,
-      threads: view.threads.length,
-      participation_edges: view.participation.length,
-      reply_edges: view.replies.length,
-    },
-    null,
-    2,
-  ),
-);
-console.log(
-  `\nPRIVATE. Named participants. gitignored, never published, and the site ` +
-    `build cannot reach it.`,
-);

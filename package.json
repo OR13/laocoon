@@ -11,7 +11,7 @@
     "stats": "bun run src/cli/stats.ts",
     "test": "bun test",
     "test:py": "uv run --directory python --with pytest pytest tests -q",
-    "check": "tsc --noEmit && bun test && uv run --directory python --with pytest pytest tests -q",
+    "check": "tsc --noEmit && bun --cwd web run typecheck && bun test && uv run --directory python --with pytest pytest tests -q",
     "typecheck": "tsc --noEmit",
     "resolve": "bun run src/cli/resolve.ts",
     "reputation": "bun run src/cli/reputation.ts",
@@ -22,13 +22,12 @@
     "agreement": "bun run src/cli/agreement.ts",
     "site": "bun run src/cli/site.ts",
     "private-view": "bun run src/cli/private-view.ts",
-    "bundle:graph": "bun build src/site/vendor/graph-bundle.entry.ts --minify --target browser --outfile src/site/vendor/graph-bundle.js"
+    "private-serve": "bun run src/cli/private-view.ts --serve",
+    "web:typecheck": "bun --cwd web run typecheck"
   },
   "dependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "cytoscape": "^3.34.1",
-    "cytoscape-fcose": "^2.2.0",
     "mailparser": "^3.9.15",
     "yaml": "^2.8.1"
   },

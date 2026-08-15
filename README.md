@@ -48,7 +48,9 @@ Phases 1 and 2 built. Nothing is published, and the site is not up.
   raw reply volume. Participation by accounts with community-conferred standing
   is the only forecaster that ever beats that baseline.
   [`docs/phase-3.md`](docs/phase-3.md).
-- **Phase 4** — the dashboard. Built and running locally; **not deployed**.
+- **Phase 4** — the dashboard: a Next.js static export (React, TypeScript,
+  Tailwind v4, shadcn/ui) with a Cytoscape participation graph in the private
+  view. Built and running locally; **not deployed**.
   [`docs/phase-4.md`](docs/phase-4.md).
 
 The seed rule is published in full: [`docs/seed-rule.md`](docs/seed-rule.md).
@@ -61,7 +63,8 @@ bun run resolve && bun run seed && bun run reputation --list agentproto
 bun run classify && bun run agreement
 bun run measure --list agentproto
 bun run holdout --list agentproto --horizon-days 2 --origin-step-days 1
-bun run site            # writes site/, deploys nothing
+bun run site            # Next.js static export -> site/, deploys nothing
+bun run private-serve   # the operator's private view, on loopback
 bun run stats
 bun run check          # typecheck, Bun tests, pytest
 ```

@@ -4,6 +4,11 @@ dist/
 .cache/
 *.local.json
 python/.venv/
+web/.next
+web/.next-public/
+web/.next-private/
+web/out/
+web/tsconfig.tsbuildinfo
 python/**/__pycache__/
 .pytest_cache/
 
