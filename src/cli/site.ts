@@ -171,6 +171,58 @@ for (const f of forecasts) {
   byOrigin.set(f.origin_at, [...(byOrigin.get(f.origin_at) ?? []), f]);
 }
 
+/**
+ * Per horizon and forecaster: how often the correlation was even defined, its
+ * median, and how often it beat the baseline. 105 raw rows bury the finding;
+ * this is the finding.
+ */
+type Summary = {
+  horizon: number;
+  forecaster: string;
+  isBaseline: boolean;
+  runs: number;
+  defined: number;
+  median: number | null;
+  beatsBaseline: number;
+};
+
+const summaries: Summary[] = [];
+for (const horizon of [...new Set(forecasts.map((f) => f.horizon_days))].sort((a, b) => a - b)) {
+  const atHorizon = forecasts.filter((f) => f.horizon_days === horizon);
+  const baselineAt = new Map(
+    atHorizon.filter((f) => f.is_baseline).map((f) => [f.origin_at, f]),
+  );
+  for (const forecaster of [...new Set(atHorizon.map((f) => f.forecaster))]) {
+    const runs = atHorizon.filter((f) => f.forecaster === forecaster);
+    const defined = runs.map((r) => r.spearman).filter((s): s is number => s !== null).sort((a, b) => a - b);
+    const beats = runs.filter((r) => {
+      const peer = baselineAt.get(r.origin_at);
+      return !r.is_baseline && r.spearman !== null && peer?.spearman != null && r.spearman > peer.spearman;
+    }).length;
+    summaries.push({
+      horizon,
+      forecaster,
+      isBaseline: runs[0]?.is_baseline ?? false,
+      runs: runs.length,
+      defined: defined.length,
+      median: defined.length ? defined[Math.floor(defined.length / 2)]! : null,
+      beatsBaseline: beats,
+    });
+  }
+}
+
+const summaryRows = summaries
+  .map(
+    (s) =>
+      `<tr><td class="num">${s.horizon}d</td>` +
+      `<td><code>${escapeHtml(s.forecaster)}</code>${s.isBaseline ? " <em>(baseline)</em>" : ""}</td>` +
+      numberCell(s.runs) +
+      numberCell(s.defined) +
+      `<td class="num">${s.median === null ? '<span class="nodata">undefined</span>' : (s.median >= 0 ? "+" : "") + s.median.toFixed(3)}</td>` +
+      `<td class="num">${s.isBaseline ? '<span class="nodata">—</span>' : s.beatsBaseline}</td></tr>`,
+  )
+  .join("\n");
+
 const accuracyRows = [...byOrigin]
   .sort()
   .flatMap(([origin, group]) => {
@@ -211,6 +263,20 @@ so.</p>
 a predictor is constant across every thread, which happens routinely on a corpus
 this small. That is a real limitation of the data, not a rendering gap.</p>
 
+<h2>Summary</h2>
+<div class="scroll">
+<table>
+  <caption>Median across origins. Origins roll daily, so successive windows overlap and these runs are correlated — they are not independent trials.</caption>
+  <thead><tr><th class="num">Horizon</th><th>Forecaster</th><th class="num">Origins</th>
+  <th class="num">Correlation defined</th><th class="num">Median Spearman</th>
+  <th class="num">Beats baseline</th></tr></thead>
+  <tbody>
+${summaryRows || '<tr><td colspan="6"><span class="nodata">No evaluations recorded yet.</span></td></tr>'}
+  </tbody>
+</table>
+</div>
+
+<h2>Every evaluation</h2>
 <div class="scroll">
 <table>
   <caption>One row per origin per forecaster. Method: <a href="https://github.com/OR13/laocoon/blob/main/docs/holdout.md">docs/holdout.md</a>.</caption>

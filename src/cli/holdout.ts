@@ -24,6 +24,7 @@ import { ARTIFACTS_DIR, EVENTS_DIR, PRIVATE_DIR, repoPath } from "../lib/paths.t
 const { values } = parseArgs({
   options: {
     "horizon-days": { type: "string", default: "7" },
+    "origin-step-days": { type: "string" },
     origin: { type: "string", multiple: true },
     list: { type: "string", default: "agentproto" },
     model: { type: "string", default: "gemma4:12b" },
@@ -45,6 +46,7 @@ const args = [
   "--model", values.model!,
   "--list", values.list!,
 ];
+if (values["origin-step-days"]) args.push("--origin-step-days", values["origin-step-days"]);
 for (const origin of values.origin ?? []) args.push("--origin", origin);
 
 const proc = Bun.spawn(["uv", ...args], { stdout: "inherit", stderr: "inherit" });

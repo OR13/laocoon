@@ -20,6 +20,7 @@ import type { Event, SourceRef, ThreadMeasured } from "../schema/generated.ts";
 import { JsonlEventStore } from "../store/jsonl-store.ts";
 import { makeEvent } from "../events/factory.ts";
 import { PROMPT_HASH, PROMPT_VERSION } from "../classify/prompt.ts";
+import { assertNoSenderHash } from "../site/publishable.ts";
 import { ARTIFACTS_DIR, EVENTS_DIR, PRIVATE_DIR, repoPath } from "../lib/paths.ts";
 
 const { values } = parseArgs({
@@ -58,10 +59,14 @@ if ((await proc.exited) !== 0) throw new Error("laocoon.measures failed");
 const measures = (await Bun.file(out).json()) as ThreadMeasured[];
 
 // A measure is published. A sender hash inside one would make it a per-person
-// record, so the check is here rather than in a review comment.
-if (/sha256:[0-9a-f]{64}/.test(JSON.stringify(measures.map((m) => ({ ...m, thread_id: "" }))))) {
-  throw new Error("a thread measure carries a sender hash; refusing to record it");
-}
+// record, so the check is here rather than in a review comment. The classifier's
+// prompt hash is the same shape and is allowed by name, never by pattern —
+// loosening the pattern would let a sender hash through with it.
+assertNoSenderHash(
+  "thread measures",
+  JSON.stringify(measures),
+  [PROMPT_HASH, ...measures.map((m) => m.provenance.prompt_hash)],
+);
 
 const SOURCE: SourceRef = { kind: "projection", name: "laocoon.measures" };
 const store = new JsonlEventStore<Event>(EVENTS_DIR, "event");

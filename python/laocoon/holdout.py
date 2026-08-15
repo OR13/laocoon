@@ -182,6 +182,14 @@ def main() -> int:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--horizon-days", type=int, default=7)
     parser.add_argument(
+        "--origin-step-days",
+        type=float,
+        default=None,
+        help="Spacing between rolling origins. Defaults to the horizon, which gives "
+        "non-overlapping windows and very few of them; a smaller step gives more "
+        "evaluation points at the cost of their being correlated.",
+    )
+    parser.add_argument(
         "--origin",
         action="append",
         dest="origins",
@@ -208,12 +216,13 @@ def main() -> int:
         # that still has a full horizon of observed data after it. An origin
         # without a complete horizon would score the system against a future
         # that has not happened yet.
+        step = timedelta(days=args.origin_step_days or args.horizon_days)
         last_scoreable = sent[-1] - timedelta(days=args.horizon_days)
         origins = []
         cursor = last_scoreable
-        while cursor > sent[0] + timedelta(days=args.horizon_days):
+        while cursor > sent[0]:
             origins.append(cursor)
-            cursor -= timedelta(days=args.horizon_days)
+            cursor -= step
         origins.reverse()
 
     evaluations: list[dict[str, Any]] = []

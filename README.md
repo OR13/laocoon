@@ -42,6 +42,14 @@ Phases 1 and 2 built. Nothing is published, and the site is not up.
   accounts seeded. No mutually-reinforcing isolated cluster exists in this
   corpus — the honest result is that there is nothing there to find yet.
   [`docs/phase-2.md`](docs/phase-2.md).
+- **Phase 3** — substance classification and the temporal holdout. The
+  classifier called 81 of 82 replies substantive and none hollow, so the
+  substance measure carries no information here and is numerically identical to
+  raw reply volume. Participation by accounts with community-conferred standing
+  is the only forecaster that ever beats that baseline.
+  [`docs/phase-3.md`](docs/phase-3.md).
+- **Phase 4** — the dashboard. Built and running locally; **not deployed**.
+  [`docs/phase-4.md`](docs/phase-4.md).
 
 The seed rule is published in full: [`docs/seed-rule.md`](docs/seed-rule.md).
 
@@ -50,6 +58,10 @@ bun install
 LAOCOON_IMAP_EMAIL=you@example.org bun run ingest --list agentproto
 bun run graph --list agentproto
 bun run resolve && bun run seed && bun run reputation --list agentproto
+bun run classify && bun run agreement
+bun run measure --list agentproto
+bun run holdout --list agentproto --horizon-days 2 --origin-step-days 1
+bun run site            # writes site/, deploys nothing
 bun run stats
 bun run check          # typecheck, Bun tests, pytest
 ```
