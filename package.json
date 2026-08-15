@@ -20,7 +20,8 @@
     "measure": "bun run src/cli/measure.ts",
     "holdout": "bun run src/cli/holdout.ts",
     "agreement": "bun run src/cli/agreement.ts",
-    "site": "bun run src/cli/site.ts"
+    "site": "bun run src/cli/site.ts",
+    "private-view": "bun run src/cli/private-view.ts"
   },
   "dependencies": {
     "ajv": "^8.17.1",

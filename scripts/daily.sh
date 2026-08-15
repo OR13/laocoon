@@ -42,6 +42,10 @@ bun --cwd "$ROOT" run holdout --list "$LIST"
 # Build the static site. Building is not publishing: nothing is deployed here.
 bun --cwd "$ROOT" run site
 
+# The operator's private view, which names participants. Written under private/,
+# which is gitignored and which the site build cannot reach.
+bun --cwd "$ROOT" run private-view
+
 bun --cwd "$ROOT" run stats
 
 # Committing is safe: the log is append-only and the working tree carries nothing
