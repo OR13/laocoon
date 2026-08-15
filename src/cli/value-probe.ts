@@ -11,9 +11,15 @@
  * 164. This runs a stratified sample first and prints the share of messages on
  * which each of the six flags fires.
  *
- * **What counts as a pass:** every flag strictly between 0 and 1, and the six
- * not all moving together. A flag that is always true carries no information;
- * six flags that always agree are one flag with five aliases.
+ * **What counts as a pass:** every flag strictly between 0 and 1, and no two
+ * moving together. A flag that is always true carries no information, and two
+ * flags that always agree are one flag with an alias.
+ *
+ * It has caught three failures so far. v2.0.0: three of six flags degenerate.
+ * v2.1.0: two still degenerate, and identical to each other. v3.0.0 drops
+ * those two to a computed measure and passes at 0.79 / 0.63 / 0.79 / 0.73 with
+ * nothing redundant. It also caught the sample being drawn from one list,
+ * because the reply graph covered one list.
  */
 import { parseArgs } from "node:util";
 import type { Event, MessageObserved, ReplyGraph } from "../schema/generated.ts";
@@ -204,7 +210,7 @@ const report = {
   redundant_pairs: redundant,
   verdict:
     degenerate.length === 0 && redundant.length === 0
-      ? "six independent flags, all varying"
+      ? `${VALUE_PROPERTIES.length} independent flags, all varying`
       : "does not separate — see degenerate_flags / redundant_pairs",
 };
 console.log(JSON.stringify(report, null, 2));
