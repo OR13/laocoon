@@ -28,11 +28,15 @@ const { values } = parseArgs({
   },
 });
 
+// Per list. The account graph differs between lists, so one shared reputation
+// file silently gave every agent2agent account a score of zero — computed from
+// a graph it was not in.
+const suffix = (values.list ?? []).length === 1 ? `-${values.list![0]}` : "";
 const privateOut = resolvePath(
-  values["private-out"] ?? join(PRIVATE_DIR, "artifacts", "reputation.json"),
+  values["private-out"] ?? join(PRIVATE_DIR, "artifacts", `reputation${suffix}.json`),
 );
 const aggregateOut = resolvePath(
-  values["aggregate-out"] ?? join(ARTIFACTS_DIR, "community-structure.json"),
+  values["aggregate-out"] ?? join(ARTIFACTS_DIR, `community-structure${suffix}.json`),
 );
 
 if (!privateOut.startsWith(PRIVATE_DIR + "/")) {
