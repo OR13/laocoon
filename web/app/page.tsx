@@ -8,7 +8,7 @@ import { archiveListUrl, archiveMessageUrl } from "@/lib/archive";
 import { loadPublic } from "@/lib/data";
 
 export default async function OverviewPage() {
-  const { activity, windows, structure, forecasts, measures, trees } = await loadPublic();
+  const { activity, windows, structure, forecasts, measures, trees, health } = await loadPublic();
 
   // The list with a usable topic partition leads. agentproto's 23 threads are
   // all about one charter, so its clustering is refused rather than forced —
@@ -16,6 +16,9 @@ export default async function OverviewPage() {
   // structure.
   const tree =
     trees.find((t) => t.topics.length > 0) ?? trees.find((t) => t.list_name === "agentproto") ?? null;
+
+  const listHealth = tree ? health.find((h) => h.list_name === tree.list_name) : undefined;
+  const healthOf = new Map((listHealth?.threads ?? []).map((h) => [h.thread_id, h]));
 
   const topicOfThread = new Map<string, string>();
   tree?.topics.forEach((topic) => topic.threads.forEach((id) => topicOfThread.set(id, topic.id)));
@@ -52,6 +55,9 @@ export default async function OverviewPage() {
           distinct_senders: th.distinct_senders,
           last_message_at: th.last_message_at,
           median_novelty: th.median_novelty,
+          health: healthOf.get(th.id)?.state,
+          reach: healthOf.get(th.id)?.reach,
+          uptakeFromStanding: healthOf.get(th.id)?.uptake_from_standing,
         })),
         persons: [],
         participation: [],
@@ -62,7 +68,11 @@ export default async function OverviewPage() {
   return (
     <SiteShell
       title="LAOCOÖN"
-      lede="What the list actually did this week — and whether volume is being mistaken for consensus."
+      lede={`What the lists actually did this week — and whether volume is being mistaken for consensus.${
+        activity && tree && activity.list_name !== tree.list_name
+          ? ` Activity below covers ${activity.list_name}; topics and health cover ${tree.list_name}, which is the list with enough structure to model.`
+          : ""
+      }`}
       active="/"
       nav={PUBLIC_NAV}
       banner={<ExperimentalBanner />}
@@ -130,6 +140,54 @@ export default async function OverviewPage() {
         <p className="text-muted-foreground text-sm">
           No activity rollup yet — run <code>bun run activity</code>.
         </p>
+      )}
+
+      {listHealth && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-base">Discussion health — {listHealth.list_name}</CardTitle>
+            <CardDescription>
+              Every thread of {listHealth.thresholds.min_messages}+ messages, placed by three
+              measures taken independently: <strong>reach</strong> (distinct people per
+              message), <strong>uptake</strong> (share of replies from an account with
+              community-conferred standing) and <strong>novelty</strong> (how much of each
+              reply was new to the thread). The state comes from those three together, never
+              from an average of them — and it describes a discussion, never a person.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {(
+                [
+                  ["open", "Open", "reach and novelty both high — going somewhere", "var(--good)"],
+                  ["narrow", "Narrow", "neither clearly one nor the other", "var(--muted-foreground)"],
+                  ["closed", "Closed", "few people, no outside uptake, repeating", "var(--warn)"],
+                ] as const
+              ).map(([key, label, note, colour]) => (
+                <div key={key} className="rounded-lg border p-3">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="inline-block size-2.5 rounded-full"
+                      style={{ background: colour }}
+                    />
+                    <span className="text-xs font-semibold">{label}</span>
+                  </div>
+                  <div className="tnum mt-1 text-2xl font-semibold">
+                    {listHealth.counts[key] ?? 0}
+                  </div>
+                  <p className="text-muted-foreground mt-0.5 text-xs">{note}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-muted-foreground mt-3 text-xs">
+              {listHealth.threads_scored} threads scored. A &ldquo;closed&rdquo; state is a
+              reason to go and read the thread. It says nothing about how anything in it was
+              written, and it cannot: every input is graph position or overlap with earlier
+              text, so a group of people talking only to each other and repeating themselves
+              scores the same whoever they are.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       <div className="mt-8 grid gap-4 lg:grid-cols-3">

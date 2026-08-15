@@ -73,10 +73,20 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
     graph.forEachNode((key, attrs) => {
       const tier = attrs.tier as Tier;
       const intensity = (attrs.intensity ?? null) as number | null;
+      const health = attrs.health as string | undefined;
+      // Health colours the thread itself. Amber for a closed exchange, not red:
+      // this is a prompt to go and read the thread, not an accusation, and the
+      // state is never shown without its three inputs beside it.
+      const byHealth: Record<string, string> = {
+        open: cssVar("--cy-good") || "#1a7f4f",
+        closed: cssVar("--cy-warn") || "#8a5a00",
+      };
       graph.setNodeAttribute(
         key,
         "color",
-        tier === "thread" ? threadColour : rampColour(intensity, ramp, threadColour),
+        tier === "thread"
+          ? (health && byHealth[health]) || threadColour
+          : rampColour(intensity, ramp, threadColour),
       );
     });
   }, [palette]);
@@ -115,6 +125,7 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
         standing: n.standing ?? "none",
         cluster: n.cluster,
         gist: n.gist ?? "",
+        health: n.health ?? "unmeasured",
         size: min + span * Math.sqrt(n.weight / (maxByTier.get(n.tier) ?? 1)),
         // Shape carries node type so the tiers survive greyscale.
         type: n.tier === "thread" ? "square" : "circle",

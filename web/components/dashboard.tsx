@@ -92,6 +92,9 @@ const peopleConfig = {
 } satisfies ChartConfig;
 
 export function Dashboard({ activity }: { activity: Activity }) {
+  // The list this rollup covers is named on the page, because the topic and
+  // health sections below may be showing a different one — agentproto has no
+  // usable topic partition, so those fall through to agent2agent.
   const { days } = useTimeRange();
   const { current, previous } = useMemo(
     () => splitWindow(activity.daily, days),
@@ -125,7 +128,8 @@ export function Dashboard({ activity }: { activity: Activity }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-muted-foreground text-sm">
-          Showing <strong className="text-foreground">{rangeLabel}</strong>
+          <strong className="text-foreground">{activity.list_name}</strong> —{" "}
+          <strong className="text-foreground">{rangeLabel}</strong>
           {current.length > 0 && <> — {from} to {to}</>}. Deltas compare with the
           equally long window immediately before.
         </p>

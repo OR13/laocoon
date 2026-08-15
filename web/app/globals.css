@@ -50,6 +50,7 @@
   --chart-new: #8b8a85;
   --good: #1a7f4f;
   --bad: #a33b39;
+  --cy-good: #1a7f4f;
 }
 
 .dark {
@@ -91,6 +92,7 @@
   --chart-new: #8d8c84;
   --good: #5cc08c;
   --bad: #e88f8d;
+  --cy-good: #5cc08c;
 }
 
 @theme inline {

@@ -211,6 +211,26 @@ export interface TopicTree {
   unassigned_threads: string[];
 }
 
+export interface Health {
+  publication: string;
+  list_name: string;
+  thresholds: Record<string, number>;
+  counts: Record<string, number>;
+  threads_scored: number;
+  threads: {
+    thread_id: string;
+    subject: string;
+    messages: number;
+    distinct_senders: number;
+    started_at: string | null;
+    last_message_at: string | null;
+    reach: number;
+    uptake_from_standing: number;
+    median_novelty: number | null;
+    state: "open" | "narrow" | "closed" | "unmeasured";
+  }[];
+}
+
 export interface PublicData {
   measures: ThreadMeasure[];
   forecasts: Forecast[];
@@ -219,6 +239,7 @@ export interface PublicData {
   activity: Activity | null;
   topics: TopicsArtifact[];
   trees: TopicTree[];
+  health: Health[];
 }
 
 export interface CommunityStructure {
@@ -324,7 +345,23 @@ export async function loadPublic(): Promise<PublicData> {
     }
   }
 
+  const health: Health[] = [];
+  for (const list of ["agentproto", "agent2agent"]) {
+    try {
+      const raw = JSON.parse(
+        await readFile(join(ARTIFACTS_DIR, `health-${list}.json`), "utf8"),
+      ) as Health;
+      if (raw.publication !== "aggregate_public") {
+        throw new Error(`refusing health-${list}.json: publication is ${raw.publication}`);
+      }
+      health.push(raw);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("refusing")) throw error;
+    }
+  }
+
   return {
+    health,
     trees,
     topics,
     activity,
