@@ -144,7 +144,9 @@ for (const [index, { child, parent }] of sample.entries()) {
     reply: replyText,
   });
 
-  const { text, durationMs } = await ollama.generateJson(model, prompt, 400);
+  // 700, not 400: six objects with quotes overran the smaller budget and the
+  // response came back as JSON cut off mid-object.
+  const { text, durationMs } = await ollama.generateJson(model, prompt, 700);
   const verdict = parseValueVerdict(text);
   if (!verdict) {
     unparsed++;

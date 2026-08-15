@@ -138,6 +138,9 @@ def main() -> int:
         what_works.update(
             {
                 "referent_kinds": concrete_axis("referent_kinds"),
+                # Computed, not asked: the model returned false on every
+                # message for this property under two phrasings.
+                "distinctiveness": concrete_axis("distinctiveness"),
                 "referent_density": concrete_axis("referent_density"),
                 "draft_references": concrete_axis("draft_references"),
                 "section_references": concrete_axis("section_references"),

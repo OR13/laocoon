@@ -17,10 +17,8 @@
  *    it fails alone rather than taking the measure down with it.
  * 2. **The thread, not just the parent.** The property the operator describes —
  *    an exchange that circles without going anywhere — is invisible from a
- *    single pair of messages. `interchangeable` asks whether the reply could be
- *    moved to a different thread on this list without looking out of place,
- *    which is a question about the reply's relationship to its context and is
- *    the sharpest available handle on generic filler.
+ *    single pair of messages, so the earlier messages are in the prompt and
+ *    `responds_to_a_specific_point` has to quote from them.
  * 3. **Observable properties, not quality.** Every question asks what the text
  *    *does*, not how good it is. "Does it name something specific" has an
  *    answer a second reader would agree with; "is this a good contribution"
@@ -28,6 +26,39 @@
  * 4. **Reasons are quoted, not summarised.** Each true flag must point at the
  *    span that made it true, so a verdict can be checked against the message
  *    rather than taken on trust.
+ *
+ * **Version 3.0.0 asks four things, not six.** Two of the original six —
+ * `restates_without_adding` and `interchangeable` — fired on zero messages out
+ * of 43, twice, under two phrasings, on both lists. They are the two whose
+ * "true" is unflattering, and no rewording got the model to report them.
+ *
+ * They are now computed instead, in `distinctiveness.ts`, as the difference
+ * between a message's similarity to its own thread and to the rest of the
+ * list. That measure says 17.1% of agent2agent messages sit no closer to their
+ * own thread than to any other, against 8.6% on agentproto — a real
+ * distribution, and a real difference between the lists, for the property the
+ * model scored at zero. **Do not add them back to this prompt.**
+ *
+ * **Version 2.0.0 failed its own probe, and 2.1.0 was the first response.** On 39
+ * agentproto replies three of the six flags were degenerate:
+ * `responds_to_a_specific_point` fired on every message, and
+ * `restates_without_adding` and `interchangeable` fired on none — the two
+ * flags whose "true" is unflattering. Asked a yes/no question about whether a
+ * message is filler, the model gives the charitable answer, which is the same
+ * failure that made substantive/hollow useless.
+ *
+ * Demanding evidence rather than a verdict fixed one of the three:
+ * `responds_to_a_specific_point` went from 1.000 to 0.814 once it had to quote
+ * the words the reply takes up, because a model that cannot find the quote has
+ * answered the question. It did nothing for the other two, where the evidence
+ * had to be read backwards — asked to name what a reply could not be separated
+ * from, a model will always find some noun in the thread. That asymmetry is
+ * why the remaining four are all positively phrased.
+ *
+ * That probe was also run against the wrong corpus. `artifacts/reply-graph.json`
+ * covered agentproto alone — which is why the old classifier's 164 verdicts are
+ * 82 replies times two models, and why neither has ever seen the 1,233-message
+ * list the operator is actually worried about.
  *
  * **Nothing here concerns provenance, and the prompt says so.** Not whether a
  * message was written by a model, not whether it "reads as generated", not a
@@ -39,7 +70,7 @@
  */
 import { sha256 } from "../lib/hash.ts";
 
-export const VALUE_PROMPT_VERSION = "2.0.0";
+export const VALUE_PROMPT_VERSION = "3.0.0";
 
 export const VALUE_PROMPT = `You are reading one reply on an IETF technical standards mailing list, in the context of the thread it belongs to.
 
@@ -47,17 +78,15 @@ Report observable properties of the REPLY. Do not rate its quality, and do not s
 
 Answer each of these independently. Several may be true; all may be false.
 
+For each one, find the evidence before you answer. Where a property asks you to quote or name something, the answer is false when you cannot find it — do not give the benefit of the doubt, and do not answer from the general impression the message leaves.
+
 1. names_something_specific — does the reply identify a particular artifact, mechanism, message, error case or scenario, as opposed to a category or a topic area? "the token binding in section 4.2" and "what happens when the intermediary retries" are specific. "security considerations", "interoperability concerns", "the ecosystem" are not.
 
 2. makes_a_checkable_claim — does the reply assert something that could turn out to be wrong? A statement about how a protocol behaves, what a document says, or what would happen in a case. Opinions about direction, importance or priorities are not checkable claims.
 
-3. responds_to_a_specific_point — does the reply take up a particular thing said in the thread and address it, rather than replying to the thread's general subject?
+3. responds_to_a_specific_point — quote the exact words FROM THE THREAD OR PARENT that this reply takes up and addresses. Not the subject line, not the general topic: a particular thing somebody said. If you cannot find one, the answer is false.
 
 4. proposes_an_action — does the reply say what should be done next: text to change, a question to resolve, an experiment to run, a decision to make?
-
-5. restates_without_adding — is the substance of the reply already present in the thread, restated in different words?
-
-6. interchangeable — could this reply be moved into a different thread on this list, on a different subject, without looking out of place? Judge the reply's own text: if it would still read as a sensible contribution somewhere else, it is interchangeable. A reply that only makes sense here is not.
 
 THREAD SUBJECT: {{subject}}
 
@@ -76,13 +105,11 @@ THE REPLY TO REPORT ON:
 {{reply}}
 """
 
-Respond with JSON only, no other text. For each property that is true, quote at most 10 words from the reply that make it true; use null when it is false.
+Respond with JSON only, no other text. In "quote", put the evidence the property asked you for, at most 12 words; use null where the property is false.
 {"names_something_specific": {"value": true|false, "quote": "<...>"|null},
  "makes_a_checkable_claim": {"value": true|false, "quote": "<...>"|null},
  "responds_to_a_specific_point": {"value": true|false, "quote": "<...>"|null},
- "proposes_an_action": {"value": true|false, "quote": "<...>"|null},
- "restates_without_adding": {"value": true|false, "quote": "<...>"|null},
- "interchangeable": {"value": true|false, "quote": "<...>"|null}}`;
+ "proposes_an_action": {"value": true|false, "quote": "<...>"|null}}`;
 
 export const VALUE_PROMPT_HASH = sha256(VALUE_PROMPT);
 
@@ -92,8 +119,6 @@ export const VALUE_PROPERTIES = [
   "makes_a_checkable_claim",
   "responds_to_a_specific_point",
   "proposes_an_action",
-  "restates_without_adding",
-  "interchangeable",
 ] as const;
 
 export type ValueProperty = (typeof VALUE_PROPERTIES)[number];
@@ -104,7 +129,7 @@ export interface ValueVerdict {
 
 /** Characters of the reply and parent shown to the model. */
 export const MAX_EXCERPT_CHARS = 4000;
-/** Characters of earlier-thread context. Enough to judge `interchangeable`. */
+/** Characters of earlier-thread context, for the quote-from-the-thread flag. */
 export const MAX_CONTEXT_CHARS = 3000;
 
 export function excerpt(body: string, max = MAX_EXCERPT_CHARS): string {

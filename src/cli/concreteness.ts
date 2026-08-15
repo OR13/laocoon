@@ -16,17 +16,36 @@
  */
 import { parseArgs } from "node:util";
 import { join } from "node:path";
-import type { Event, MessageObserved } from "../schema/generated.ts";
+import type { Event, MessageObserved, ReplyGraph } from "../schema/generated.ts";
 import { JsonlEventStore } from "../store/jsonl-store.ts";
 import { newText } from "../ingest/parse.ts";
 import { concreteness, type Concreteness } from "../classify/concreteness.ts";
+import { distinctiveness, MIN_TERMS, type Document } from "../classify/distinctiveness.ts";
 import { BodyCache } from "../ingest/body-cache.ts";
-import { EVENTS_DIR, PRIVATE_DIR } from "../lib/paths.ts";
+import { ARTIFACTS_DIR, EVENTS_DIR, PRIVATE_DIR } from "../lib/paths.ts";
 
 const { values } = parseArgs({
   options: { lists: { type: "string", default: "agentproto,agent2agent" } },
 });
 const lists = values.lists!.split(",").map((s) => s.trim());
+
+// Thread membership comes from the reply graph, which must cover every list
+// being measured — distinctiveness compares a message against its own thread.
+const graphPath = join(ARTIFACTS_DIR, "reply-graph.json");
+if (!(await Bun.file(graphPath).exists())) {
+  throw new Error(`no ${graphPath}: run \`bun run graph --list <each list>\` first`);
+}
+const graph = (await Bun.file(graphPath).json()) as ReplyGraph;
+const missing = lists.filter((l) => !graph.coverage.lists.includes(l));
+if (missing.length) {
+  // The reply graph covered agentproto alone for the whole of phase 3, which
+  // is why the old classifier never saw the larger list. Fail loudly instead.
+  throw new Error(
+    `${graphPath} covers [${graph.coverage.lists.join(", ")}] but was asked for ` +
+      `[${missing.join(", ")}]. Rebuild it with a --list for each.`,
+  );
+}
+const threadOf = new Map(graph.nodes.map((n) => [n.message_id, n.thread_id]));
 
 const bodies = new BodyCache();
 const store = new JsonlEventStore<Event>(EVENTS_DIR, "event");
@@ -42,6 +61,10 @@ for await (const event of store.read()) {
 
 interface Row extends Concreteness {
   message_id: string;
+  thread_id: string | null;
+  /** own-thread minus other-thread similarity; null when too short to score. */
+  distinctiveness: number | null;
+  similarity_to_own_thread: number | null;
   list_name: string;
   sender_id: string;
   /** First parent reference, when the message declared one. */
@@ -50,6 +73,8 @@ interface Row extends Concreteness {
 }
 
 const rows: Row[] = [];
+/** Authored text, kept for the corpus-level distinctiveness pass. */
+const textOf = new Map<string, string>();
 let missingBody = 0;
 for (const { eventId, payload } of observed) {
   if (superseded.has(eventId) || !payload.message_id) continue;
@@ -61,14 +86,38 @@ for (const { eventId, payload } of observed) {
   }
   // Authored text only: quoting a draft name is not the same as engaging with
   // one, and a reply must not inherit its parent's citations.
+  const authoredText = newText(body);
   rows.push({
     message_id: payload.message_id,
+    thread_id: threadOf.get(payload.message_id) ?? null,
+    distinctiveness: null,
+    similarity_to_own_thread: null,
     list_name: payload.list_name,
     sender_id: payload.sender_id,
     in_reply_to: payload.in_reply_to?.[0] ?? null,
     sent_at: payload.sent_at ?? null,
-    ...concreteness(newText(body)),
+    ...concreteness(authoredText),
   });
+  textOf.set(payload.message_id, authoredText);
+}
+
+// Distinctiveness is scored per list: "could this be pasted into another
+// thread" is a question about *this* list's vocabulary, and pooling two lists
+// would make cross-list boilerplate look distinctive.
+for (const list of lists) {
+  const own = rows.filter((r) => r.list_name === list && r.thread_id);
+  const documents: Document[] = own.map((r) => ({
+    message_id: r.message_id,
+    thread_id: r.thread_id!,
+    text: textOf.get(r.message_id) ?? "",
+  }));
+  const scored = new Map(distinctiveness(documents).map((d) => [d.message_id, d]));
+  for (const row of own) {
+    const score = scored.get(row.message_id);
+    if (!score || score.terms < MIN_TERMS) continue;
+    row.distinctiveness = score.distinctiveness;
+    row.similarity_to_own_thread = score.similarity_to_own_thread;
+  }
 }
 
 const generatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -96,6 +145,21 @@ for (const list of lists) {
     asks_a_question: share(own, (r) => r.questions > 0),
     contends: share(own, (r) => r.contends > 0),
     offers_nothing_checkable: share(substantial, (r) => r.offers_nothing_checkable),
+    scored_for_distinctiveness: own.filter((r) => r.distinctiveness !== null).length,
+    // At or below zero the message sits as comfortably in another thread on
+    // this list as in the one it was sent to.
+    not_more_like_own_thread: share(
+      own.filter((r) => r.distinctiveness !== null),
+      (r) => (r.distinctiveness ?? 1) <= 0,
+    ),
+    distinctiveness_percentiles: (() => {
+      const values = own
+        .map((r) => r.distinctiveness)
+        .filter((d): d is number => d !== null)
+        .sort((a, b) => a - b);
+      const at = (q: number) => (values.length ? values[Math.floor(q * (values.length - 1))]! : null);
+      return { p10: at(0.1), median: at(0.5), p90: at(0.9) };
+    })(),
     referent_kinds_histogram: [0, 1, 2, 3, 4, 5].map((k) => ({
       kinds: k,
       messages: own.filter((r) => r.referent_kinds === k).length,
