@@ -78,6 +78,7 @@ def contrast(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--uptake", required=True, type=Path)
+    parser.add_argument("--concreteness", type=Path, default=None)
     parser.add_argument("--seed", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--list", dest="list_name", required=True)
@@ -108,6 +109,21 @@ def main() -> int:
         pick = lambda m: float(m[key] or 0)  # noqa: E731 - closes over key correctly
         return contrast([pick(m) for m in engaged], [pick(m) for m in ignored])
 
+    # Concreteness, joined by message id. Novelty measures distance from what
+    # the thread already said, so fluent filler scores *high* on it — it cannot
+    # see a message that commits to nothing. These count what a message points
+    # at that a reader could go and check.
+    concrete: dict[str, dict[str, Any]] = {}
+    if args.concreteness and args.concreteness.exists():
+        doc_c = json.loads(args.concreteness.read_text(encoding="utf-8"))
+        concrete = {m["message_id"]: m for m in doc_c["messages"]}
+
+    def concrete_axis(key: str) -> dict[str, float | None]:
+        def pick(group: list[dict[str, Any]]) -> list[float]:
+            return [float(concrete[m["id"]][key] or 0) for m in group if m["id"] in concrete]
+
+        return contrast(pick(engaged), pick(ignored))
+
     what_works = {
         "authored_lines": axis("authored_lines"),
         "novelty": axis("novelty"),
@@ -118,6 +134,21 @@ def main() -> int:
             [1.0 if m["sender_id"] in seed_ids else 0.0 for m in ignored],
         ),
     }
+    if concrete:
+        what_works.update(
+            {
+                "referent_kinds": concrete_axis("referent_kinds"),
+                "referent_density": concrete_axis("referent_density"),
+                "draft_references": concrete_axis("draft_references"),
+                "section_references": concrete_axis("section_references"),
+                "asks_a_question": concrete_axis("questions"),
+                "contends": concrete_axis("contends"),
+                # Negative delta expected: a message offering nothing checkable
+                # should be *less* likely to draw an established reply. If this
+                # comes back at zero the measure sees nothing that matters.
+                "offers_nothing_checkable": concrete_axis("offers_nothing_checkable"),
+            }
+        )
 
     # Buried: landed with the people who matter, in a thread nobody watched.
     buried = sorted(
