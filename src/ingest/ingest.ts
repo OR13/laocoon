@@ -129,7 +129,10 @@ export async function ingestList(
           uid_validity: prior.uidValidity,
           superseded_event_id: prior.eventId,
           superseding_event_id: id,
-          reason: prior.uidValidity === snapshot.uidValidity ? "content_changed" : "uid_validity_changed",
+          reason:
+            prior.uidValidity === snapshot.uidValidity
+              ? "observation_differs"
+              : "uid_validity_changed",
         };
         pending.push(makeEvent("ObservationSuperseded", correction, source.ref, now().toISOString()));
         messagesSuperseded += 1;

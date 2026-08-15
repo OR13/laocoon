@@ -75,6 +75,46 @@ describe("bodyShape", () => {
     expect(shape.lines).toBe(1);
   });
 
+  test("drops the mailman footer when the rule has a leading space", () => {
+    // The regression that mattered: on the real corpus the separator arrives as
+    // " ______…", and an anchored /^_{20,}$/ matched none of 71 messages, so
+    // three lines of list boilerplate were counted as text the sender wrote.
+    const shape = bodyShape(
+      [
+        "Body text.",
+        "",
+        " " + "_".repeat(47),
+        "agentproto mailing list -- agentproto@ietf.org",
+        "To unsubscribe send an email to agentproto-leave@ietf.org",
+      ].join("\n"),
+    );
+    expect(shape.unquoted_lines).toBe(1);
+    expect(shape.lines).toBe(1);
+  });
+
+  test("a quoted footer rule does not truncate the quoting message", () => {
+    // "> ____" is the footer of a message being quoted. Truncating there would
+    // discard the text the quoting sender actually wrote below it.
+    const shape = bodyShape(
+      ["> " + "_".repeat(40), "> agentproto mailing list -- agentproto@ietf.org", "My reply."].join(
+        "\n",
+      ),
+    );
+    expect(shape.quoted_lines).toBe(2);
+    expect(shape.unquoted_lines).toBe(1);
+  });
+
+  test("drops a mobile client's Original message header", () => {
+    const shape = bodyShape(
+      [
+        "Short objection.",
+        "-------- Original message --------From: Someone <a@b.c> Date: 8/6/26",
+        "quoted stuff",
+      ].join("\n"),
+    );
+    expect(shape.unquoted_lines).toBe(1);
+  });
+
   test("an empty body is all zeroes", () => {
     expect(bodyShape("")).toEqual({ chars: 0, lines: 0, quoted_lines: 0, unquoted_lines: 0 });
   });

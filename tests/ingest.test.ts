@@ -152,7 +152,7 @@ describe("ingestList", () => {
     const correction = after.find((e) => e.event_type === "ObservationSuperseded")!;
     const payload = correction.payload as ObservationSuperseded;
     expect(payload.superseded_event_id).toBe(original.event_id);
-    expect(payload.reason).toBe("content_changed");
+    expect(payload.reason).toBe("observation_differs");
 
     // Replay hides the superseded observation without deleting it.
     const state = await replay(store);

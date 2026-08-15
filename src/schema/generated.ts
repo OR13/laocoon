@@ -273,7 +273,10 @@ export interface ObservationSuperseded {
   uid_validity: number;
   superseded_event_id: ContentHash;
   superseding_event_id: ContentHash;
-  reason: "content_changed" | "uid_validity_changed";
+  /**
+   * `observation_differs` means the payload we would record now is not the one we recorded before. Ingestion cannot tell whether that is because the source changed or because our own parser was corrected, so it does not claim to: the git history of the parser disambiguates. Asserting "content_changed" would be a guess dressed as a fact.
+   */
+  reason: "observation_differs" | "uid_validity_changed";
 }
 /**
  * The published measure vector for one thread, as of one data horizon.

@@ -10,11 +10,27 @@
 /** A msg-id token inside angle brackets. */
 const MSG_ID_TOKEN = /<([^<>]+)>/g;
 
-/** Mailman appends a footer after a rule of underscores. */
-const LIST_FOOTER_RULE = /^_{20,}\s*$/;
+/**
+ * Mailman appends a footer after a rule of underscores.
+ *
+ * The leading whitespace is not optional decoration: on this corpus the rule
+ * arrives as `" _______…"` with a leading space on 71 of 106 messages, and an
+ * anchored `^_{20,}$` matched none of them. A quoted rule (`"> ____"`) is
+ * deliberately not matched — that is the footer of a message being quoted, and
+ * truncating there would discard the quoting message's own text.
+ */
+const LIST_FOOTER_RULE = /^[ \t]*_{20,}[ \t]*$/;
 
 /** RFC 3676 signature separator. */
-const SIGNATURE_SEPARATOR = /^--\s?$/;
+const SIGNATURE_SEPARATOR = /^[ \t]*--\s?$/;
+
+/**
+ * The header some mobile clients write above quoted text, e.g.
+ * `-------- Original message --------From: … Date: …`. It arrives as one long
+ * line rather than as a quote block, so nothing downstream would recognise it,
+ * and it would otherwise be counted as text the sender wrote.
+ */
+const ORIGINAL_MESSAGE_HEADER = /^[ \t]*-{4,}\s*Original [Mm]essage\s*-{4,}/;
 
 /** A quoted line, allowing the leading whitespace some clients insert. */
 const QUOTED_LINE = /^\s*>/;
@@ -79,7 +95,8 @@ export interface BodyShapeCounts {
  * Rules, in order of application:
  *   1. everything from the mailman footer rule onward is discarded — it is added
  *      by the list, not written by the sender;
- *   2. everything from an RFC 3676 signature separator onward is discarded;
+ *   2. everything from an RFC 3676 signature separator, or a mobile client's
+ *      "-------- Original message --------" header, onward is discarded;
  *   3. `quoted_lines` counts lines beginning with `>`;
  *   4. `unquoted_lines` counts the remaining lines that are non-blank and are
  *      not a client-generated attribution line. It is a count of lines of new
@@ -94,7 +111,11 @@ export function bodyShape(text: string): BodyShapeCounts {
   let end = all.length;
   for (let i = 0; i < all.length; i += 1) {
     const line = all[i]!;
-    if (LIST_FOOTER_RULE.test(line) || SIGNATURE_SEPARATOR.test(line)) {
+    if (
+      LIST_FOOTER_RULE.test(line) ||
+      SIGNATURE_SEPARATOR.test(line) ||
+      ORIGINAL_MESSAGE_HEADER.test(line)
+    ) {
       end = i;
       break;
     }

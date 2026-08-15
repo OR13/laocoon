@@ -94,7 +94,11 @@ class CrawlWindowCompleted:
 
 
 class Reason(StrEnum):
-    content_changed = 'content_changed'
+    """
+    `observation_differs` means the payload we would record now is not the one we recorded before. Ingestion cannot tell whether that is because the source changed or because our own parser was corrected, so it does not claim to: the git history of the parser disambiguates. Asserting "content_changed" would be a guess dressed as a fact.
+    """
+
+    observation_differs = 'observation_differs'
     uid_validity_changed = 'uid_validity_changed'
 
 
