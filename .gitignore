@@ -1,0 +1,14 @@
+# Local-only artifacts — never published.
+node_modules/
+dist/
+.cache/
+*.local.json
+
+# Private view: per-person scores and rankings stay off the public repo.
+private/
+
+# OS / editor noise
+.DS_Store
+*.swp
+.idea/
+.vscode/
