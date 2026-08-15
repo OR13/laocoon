@@ -205,6 +205,9 @@ def main() -> int:
     artifact = {
         "schema_version": SCHEMA_VERSION,
         "derived": True,
+        # Nodes carry sender_id, so this file yields a ranked participant list to
+        # anyone holding it. Never published; see schemas/reply-graph.yaml.
+        "publication": "private",
         "generated_at": args.generated_at
         or datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "generator": GENERATOR,

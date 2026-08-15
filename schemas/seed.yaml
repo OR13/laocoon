@@ -1,0 +1,105 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://or13.github.io/laocoon/schemas/seed.json"
+title: Seed
+description: >-
+  The community-conferred seed set: the accounts reputation propagation starts
+  from. A projection of the private log through the rule in `src/seed/rule.ts`,
+  which is published as prose in `docs/seed-rule.md`.
+
+  Private. Membership is a label attached to an identifiable person, and section
+  7 of PROBLEM.md keeps those out of publication. It does not need to be
+  published to be contestable: the rule is public and the datatracker is public,
+  so anyone can recompute this file and disagree with it.
+
+  This is also the seam between the two runtimes. The rule lives in TypeScript
+  and is applied here; the Python side consumes this artifact and never
+  re-implements the rule, so the two cannot drift.
+
+type: object
+additionalProperties: false
+required:
+  - schema_version
+  - derived
+  - publication
+  - generated_at
+  - seed_rule_version
+  - counts
+  - members
+  - unseeded
+properties:
+  schema_version:
+    type: string
+    pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+  derived:
+    const: true
+  publication:
+    const: private
+  generated_at:
+    type: string
+    format: date-time
+  seed_rule_version:
+    type: string
+    description: Version of the rule that produced this membership. Changing the
+      rule changes this, and every artifact downstream records it.
+
+  counts:
+    type: object
+    additionalProperties: false
+    required:
+      - addresses_seen
+      - resolved_to_person
+      - no_datatracker_record
+      - records_available
+      - seeded
+      - unseeded
+    description: >-
+      The funnel from list participants to seed members. `no_datatracker_record`
+      is reported as a fact and never as an inference about why, per section 8.
+    properties:
+      addresses_seen: { type: integer }
+      resolved_to_person: { type: integer }
+      no_datatracker_record: { type: integer }
+      records_available:
+        type: integer
+        description: Resolved people whose datatracker record has been fetched.
+      seeded: { type: integer }
+      unseeded: { type: integer }
+
+  clause_counts:
+    type: object
+    description: How many members each clause of the rule accounted for.
+    additionalProperties: { type: integer }
+
+  members:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [sender_id, person_id, clauses]
+      properties:
+        sender_id: { type: string }
+        person_id: { type: integer }
+        clauses:
+          type: array
+          minItems: 1
+          items: { type: string }
+          description: Every clause of the rule that matched, so a verdict is
+            explainable clause by clause rather than as a bare boolean.
+
+  unseeded:
+    type: array
+    description: >-
+      Accounts the rule did not seed, and why not — whether they were never
+      resolved, have no datatracker record, or have one that no clause matched.
+      Recorded so "not seeded" is never silently the same as "not looked at".
+    items:
+      type: object
+      additionalProperties: false
+      required: [sender_id, reason]
+      properties:
+        sender_id: { type: string }
+        person_id:
+          oneOf: [{ type: integer }, { type: "null" }]
+        reason:
+          type: string
+          enum: [not_resolved, no_datatracker_record, record_missing, no_clause_matched]

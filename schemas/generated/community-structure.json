@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://or13.github.io/laocoon/schemas/community-structure.json",
+  "title": "CommunityStructure",
+  "description": "The account graph's shape, with no account in it. Community sizes, how much each community talks outside itself, whether it contains anyone holding community-conferred standing, and how well the two edge weightings agree.\nMarked `aggregate_public`: nothing here identifies a participant, so it is the kind of thing PROBLEM.md section 7 allows to be published. That is a permission, not an instruction — publication still happens only in phase 4 and only by an explicit decision.\nA community with no seed member and a low external-edge ratio is the pattern section 3 exists to surface: a group that mostly replies to itself and does not connect to the rest of the list. That is a statement about a subgraph. It is not a claim that anyone in it is acting in bad faith, and it is emphatically not a claim about whether anything was machine-generated.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "derived",
+    "publication",
+    "generated_at",
+    "generator",
+    "seed_rule_version",
+    "accounts",
+    "graph",
+    "modularity",
+    "communities",
+    "communities_without_seed_member",
+    "weighting_agreement"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "derived": {
+      "const": true
+    },
+    "publication": {
+      "const": "aggregate_public"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "seed_rule_version": {
+      "type": "string"
+    },
+    "accounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total",
+        "seeded",
+        "no_datatracker_record",
+        "resolved_but_unseeded"
+      ],
+      "description": "Composition of the list's participants against the seed rule. Counts only. \"No datatracker record\" is a fact about a lookup, never an inference about why, per section 8.",
+      "properties": {
+        "total": {
+          "type": "integer"
+        },
+        "seeded": {
+          "type": "integer"
+        },
+        "no_datatracker_record": {
+          "type": "integer"
+        },
+        "resolved_but_unseeded": {
+          "type": "integer",
+          "description": "Has a datatracker record that no clause of the seed rule matched."
+        }
+      }
+    },
+    "graph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accounts",
+        "edges",
+        "density",
+        "self_reply_edges_dropped"
+      ],
+      "properties": {
+        "accounts": {
+          "type": "integer"
+        },
+        "edges": {
+          "type": "integer"
+        },
+        "density": {
+          "type": "number"
+        },
+        "self_reply_edges_dropped": {
+          "type": "integer"
+        }
+      }
+    },
+    "modularity": {
+      "type": "number",
+      "description": "Modularity of the Louvain partition. Near 0 means the partition is barely better than arbitrary and should not be read as structure."
+    },
+    "communities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "index",
+          "size",
+          "internal_edges",
+          "external_edges",
+          "external_edge_ratio",
+          "contains_seed_member",
+          "max_core_number"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "internal_edges": {
+            "type": "integer"
+          },
+          "external_edges": {
+            "type": "integer"
+          },
+          "external_edge_ratio": {
+            "type": "number",
+            "description": "external / (internal + external). Near 0 is a community that mostly replies to itself."
+          },
+          "contains_seed_member": {
+            "type": "boolean"
+          },
+          "max_core_number": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "communities_without_seed_member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "accounts"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer"
+        },
+        "accounts": {
+          "type": "integer"
+        }
+      }
+    },
+    "weighting_agreement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spearman",
+        "n"
+      ],
+      "properties": {
+        "spearman": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "n": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

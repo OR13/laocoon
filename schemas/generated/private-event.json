@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://or13.github.io/laocoon/schemas/private-event.json",
+  "title": "PrivateEvent",
+  "description": "An immutable observed fact that must never be published. Same append-only discipline as the public log, different destination: `private/events/`, which is gitignored.\nThese events exist because identity resolution de-pseudonymises. A record saying \"sender_id X is datatracker person 105857\" turns the public log's hashes into named individuals, and PROBLEM.md section 7 keeps any label attached to a named individual out of publication. Nothing derived from this log may be published except as an aggregate that names nobody.\nThe community-conferred seed is computed from these facts. The seed *rule* is published (docs/seed-rule.md); the seed *membership* is not, and does not have to be — anyone can recompute it from the published rule and the same public datatracker API, which is what makes it contestable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "observed_at",
+    "source",
+    "payload"
+  ],
+  "properties": {
+    "event_id": {
+      "$ref": "#/$defs/ContentHash",
+      "description": "SHA-256 over canonical JSON of {event_type, payload}. Idempotency key."
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "SenderResolved",
+        "DatatrackerRecordFetched"
+      ]
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "$ref": "#/$defs/PrivateSourceRef"
+    },
+    "payload": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SenderResolved"
+        },
+        {
+          "$ref": "#/$defs/DatatrackerRecordFetched"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "SenderResolved"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/SenderResolved"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "DatatrackerRecordFetched"
+          }
+        },
+        "required": [
+          "event_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/DatatrackerRecordFetched"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "ContentHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "PrivateSourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "name"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "datatracker",
+            "fixture"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "mailbox": {
+          "type": "string"
+        }
+      }
+    },
+    "SenderResolved": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "An address seen on a list, mapped to a datatracker person — or explicitly mapped to nothing. \"No datatracker record\" is recorded as a fact, never as an inference about why, per PROBLEM.md section 8.",
+      "required": [
+        "sender_id",
+        "address",
+        "person_id",
+        "resolution",
+        "origin"
+      ],
+      "properties": {
+        "sender_id": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "The hash that appears in the public log. The join key."
+        },
+        "address": {
+          "type": "string",
+          "description": "Plaintext, and the reason this log is gitignored."
+        },
+        "person_id": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "matched",
+            "no_record"
+          ]
+        },
+        "origin": {
+          "type": "string",
+          "description": "The datatracker `origin` field for the address, verbatim — it states how the address entered the system, e.g. \"author: draft-foo-bar\". It is recorded because it is informative, and deliberately NOT used by the seed rule: an individual submission is self-conferred standing."
+        }
+      }
+    },
+    "DatatrackerRecordFetched": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What the datatracker said about one person at one moment. Facts only; the seed rule is applied later, as a projection, so re-deciding the rule never requires re-crawling and never rewrites history.",
+      "required": [
+        "person_id",
+        "fetched_at",
+        "chair_roles",
+        "ad_roles",
+        "iab_iesg_roles",
+        "rfc_authorships",
+        "wg_document_authorships",
+        "endpoints"
+      ],
+      "properties": {
+        "person_id": {
+          "type": "integer"
+        },
+        "fetched_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "chair_roles": {
+          "type": "array",
+          "description": "Current and historic chair roles, with the group's type resolved.",
+          "items": {
+            "$ref": "#/$defs/RoleFact"
+          }
+        },
+        "ad_roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoleFact"
+          }
+        },
+        "iab_iesg_roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoleFact"
+          }
+        },
+        "rfc_authorships": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of documents of type rfc this person is an author of."
+        },
+        "wg_document_authorships": {
+          "type": "array",
+          "description": "Names of documents whose group is a working group AND whose name starts with \"draft-ietf-\", capped at 10. Names are kept rather than a bare count so the adopted-document test is applied to the actual name instead of trusting the group filter as a proxy for adoption.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "endpoints": {
+          "type": "array",
+          "description": "The API paths this record was assembled from, for audit.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "RoleFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One role, recorded as the query that found it rather than as a resolved group object. The datatracker can filter roles by group type and acronym directly, so the group's type is known by construction and no extra per-group request is made.",
+      "required": [
+        "role",
+        "group_ref",
+        "group_type",
+        "current"
+      ],
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "group_ref": {
+          "type": "string",
+          "description": "The group or grouphistory resource URI the role points at."
+        },
+        "group_type": {
+          "type": "string",
+          "description": "Known from the filter that matched: \"wg\" for the WG-chair query, \"iab_or_iesg\" for the IAB/IESG query, \"\" when the query did not constrain the group type (the AD query)."
+        },
+        "current": {
+          "type": "boolean",
+          "description": "true from the role endpoint, false from rolehistory."
+        }
+      }
+    }
+  }
+}

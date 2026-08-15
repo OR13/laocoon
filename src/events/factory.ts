@@ -3,9 +3,13 @@
  */
 import type {
   CrawlWindowCompleted,
+  DatatrackerRecordFetched,
   Event,
   MessageObserved,
   ObservationSuperseded,
+  PrivateEvent,
+  PrivateSourceRef,
+  SenderResolved,
   SourceRef,
 } from "../schema/generated.ts";
 import { sha256Json } from "../lib/hash.ts";
@@ -47,4 +51,33 @@ export function makeEvent<T extends Event["event_type"]>(
     source,
     payload,
   } as Event;
+}
+
+/** Bumped when schemas/private-event.yaml changes the events it writes. */
+export const PRIVATE_EVENT_SCHEMA_VERSION = "1.0.0";
+
+type PrivatePayloadFor<T extends PrivateEvent["event_type"]> = T extends "SenderResolved"
+  ? SenderResolved
+  : DatatrackerRecordFetched;
+
+/**
+ * The private log's constructor. Separate from {@link makeEvent} — not to avoid
+ * duplication but to create it: two logs with different schemas and different
+ * publication rules should not share a code path that could route a record to
+ * the wrong one.
+ */
+export function makePrivateEvent<T extends PrivateEvent["event_type"]>(
+  eventType: T,
+  payload: PrivatePayloadFor<T>,
+  source: PrivateSourceRef,
+  observedAt: string,
+): PrivateEvent {
+  return {
+    event_id: sha256Json({ event_type: eventType, payload }),
+    event_type: eventType,
+    schema_version: PRIVATE_EVENT_SCHEMA_VERSION,
+    observed_at: observedAt,
+    source,
+    payload,
+  } as PrivateEvent;
 }

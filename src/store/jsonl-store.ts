@@ -17,21 +17,31 @@
 import { appendFile, mkdir, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Event } from "../schema/generated.ts";
-import type { AppendResult, EventStore } from "./event-store.ts";
-import { assertValidEvent } from "./validate.ts";
+import type { AnyEvent, AppendResult, EventStore } from "./event-store.ts";
+import { assertValid } from "./validate.ts";
 
-export class JsonlEventStore implements EventStore {
+export class JsonlEventStore<E extends AnyEvent = Event> implements EventStore<E> {
   #index: Set<string> | undefined;
 
-  constructor(private readonly root: string) {}
+  /**
+   * @param root       directory the log lives in
+   * @param schemaName generated schema every appended event must satisfy.
+   *                   The public and private logs use different schemas, so a
+   *                   private record cannot be appended to the public log by
+   *                   mistake — validation refuses it.
+   */
+  constructor(
+    private readonly root: string,
+    private readonly schemaName: string = "event",
+  ) {}
 
-  async append(events: readonly Event[]): Promise<AppendResult> {
+  async append(events: readonly E[]): Promise<AppendResult> {
     const index = await this.#loadIndex();
     const byPartition = new Map<string, string[]>();
     let duplicates = 0;
 
     for (const event of events) {
-      await assertValidEvent(event);
+      await assertValid(this.schemaName, event);
       if (index.has(event.event_id)) {
         duplicates += 1;
         continue;
@@ -52,7 +62,7 @@ export class JsonlEventStore implements EventStore {
     return { appended, duplicates };
   }
 
-  async *read(): AsyncIterable<Event> {
+  async *read(): AsyncIterable<E> {
     for (const path of await this.#partitions()) {
       const text = await Bun.file(path).text();
       let lineNo = 0;
@@ -60,7 +70,7 @@ export class JsonlEventStore implements EventStore {
         lineNo += 1;
         if (!line.trim()) continue;
         try {
-          yield JSON.parse(line) as Event;
+          yield JSON.parse(line) as E;
         } catch (cause) {
           throw new Error(`corrupt event log line ${path}:${lineNo}`, { cause });
         }

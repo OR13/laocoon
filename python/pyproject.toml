@@ -5,6 +5,7 @@ description = "Compute-heavy projections for LAOCOON. Invoked as a subprocess by
 requires-python = ">=3.11"
 dependencies = [
     "networkx>=3.3",
+    "scipy>=1.13",
 ]
 
 [build-system]

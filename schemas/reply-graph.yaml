@@ -16,6 +16,7 @@ additionalProperties: false
 required:
   - schema_version
   - derived
+  - publication
   - generated_at
   - generator
   - coverage
@@ -30,6 +31,15 @@ properties:
   derived:
     const: true
     description: Present so no consumer can mistake this file for a source of truth.
+  publication:
+    const: private
+    description: >-
+      This artifact must not be published. Its nodes carry `sender_id`, from
+      which anyone could compute per-account reply counts and centrality — a
+      ranked participant list, which PROBLEM.md section 7 keeps private. It is
+      the substrate the publishable thread-level measures are derived from, not
+      a publishable object itself. A publishing step must refuse any artifact
+      whose `publication` is `private`.
   generated_at:
     type: string
     format: date-time

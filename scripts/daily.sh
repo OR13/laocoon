@@ -23,6 +23,14 @@ fi
 
 bun --cwd "$ROOT" run ingest --list "$LIST" --mode "$MODE"
 bun --cwd "$ROOT" run graph --list "$LIST"
+
+# Identity resolution and the seed touch the datatracker and write only to
+# private/. People already recorded are not re-asked; --refresh does that, and
+# is a weekly-or-slower job, not a daily one.
+bun --cwd "$ROOT" run resolve
+bun --cwd "$ROOT" run seed
+bun --cwd "$ROOT" run reputation --list "$LIST"
+
 bun --cwd "$ROOT" run stats
 
 # Committing is safe: the log is append-only and the working tree carries nothing

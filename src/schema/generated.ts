@@ -1,6 +1,125 @@
 // GENERATED FILE - DO NOT EDIT.
 // Source of truth: schemas/*.yaml. Regenerate with `bun run codegen`.
 
+// --- account-reputation.yaml ---
+/**
+ * Per-account reputation and graph position. **Private, permanently.** This is a ranked participant list, which PROBLEM.md section 7 keeps out of publication; the marker `publication: private` is here so a publishing step can refuse it mechanically rather than by anyone remembering.
+ * Scores are personalized PageRank restarted on the community-conferred seed, over account edges that point from a replier to the author they replied to. They measure reception and graph position. They are not a judgement about a person's competence, their good faith, or the provenance of anything they wrote, and nothing downstream may present them as one.
+ */
+export interface AccountReputation {
+  schema_version: string;
+  derived: true;
+  publication: "private";
+  generated_at: string;
+  generator: {
+    name: string;
+    version: string;
+  };
+  /**
+   * Recorded on every artifact the seed feeds, so a series computed under different rules is never silently compared.
+   */
+  seed_rule_version: string;
+  damping: number;
+  graph: {
+    accounts: number;
+    edges: number;
+    /**
+     * Replies to one's own message. Not evidence of anyone else's engagement, so they are excluded and counted.
+     */
+    self_reply_edges_dropped: number;
+    /**
+     * Seed members who actually posted. Propagation restarts only on these; a seed member who never posted contributes nothing.
+     */
+    seed_accounts_in_graph: number;
+  };
+  accounts: {
+    sender_id: string;
+    seeded: boolean;
+    /**
+     * Seed clauses matched. Empty for an unseeded account.
+     */
+    clauses: string[];
+    ppr_replies: number;
+    /**
+     * Same propagation over only those replies that quote.
+     */
+    ppr_quoting: number;
+    rank_replies: number;
+    rank_quoting: number;
+    community: number;
+    core_number: number;
+    replies_received: number;
+    replies_sent: number;
+  }[];
+  /**
+   * Rank correlation between the two weightings. Low agreement means the choice of weighting is doing the work rather than the data, and the result should not be trusted until the phase-3 substance classifier settles it.
+   */
+  weighting_agreement: {
+    spearman: number | null;
+    n: number;
+  };
+}
+
+// --- community-structure.yaml ---
+/**
+ * The account graph's shape, with no account in it. Community sizes, how much each community talks outside itself, whether it contains anyone holding community-conferred standing, and how well the two edge weightings agree.
+ * Marked `aggregate_public`: nothing here identifies a participant, so it is the kind of thing PROBLEM.md section 7 allows to be published. That is a permission, not an instruction — publication still happens only in phase 4 and only by an explicit decision.
+ * A community with no seed member and a low external-edge ratio is the pattern section 3 exists to surface: a group that mostly replies to itself and does not connect to the rest of the list. That is a statement about a subgraph. It is not a claim that anyone in it is acting in bad faith, and it is emphatically not a claim about whether anything was machine-generated.
+ */
+export interface CommunityStructure {
+  schema_version: string;
+  derived: true;
+  publication: "aggregate_public";
+  generated_at: string;
+  generator: {
+    name: string;
+    version: string;
+  };
+  seed_rule_version: string;
+  /**
+   * Composition of the list's participants against the seed rule. Counts only. "No datatracker record" is a fact about a lookup, never an inference about why, per section 8.
+   */
+  accounts: {
+    total: number;
+    seeded: number;
+    no_datatracker_record: number;
+    /**
+     * Has a datatracker record that no clause of the seed rule matched.
+     */
+    resolved_but_unseeded: number;
+  };
+  graph: {
+    accounts: number;
+    edges: number;
+    density: number;
+    self_reply_edges_dropped: number;
+  };
+  /**
+   * Modularity of the Louvain partition. Near 0 means the partition is barely better than arbitrary and should not be read as structure.
+   */
+  modularity: number;
+  communities: {
+    index: number;
+    size: number;
+    internal_edges: number;
+    external_edges: number;
+    /**
+     * external / (internal + external). Near 0 is a community that mostly replies to itself.
+     */
+    external_edge_ratio: number;
+    contains_seed_member: boolean;
+    max_core_number: number;
+  }[];
+  communities_without_seed_member: {
+    count: number;
+    accounts: number;
+  };
+  weighting_agreement: {
+    spearman: number | null;
+    n: number;
+  };
+}
+
 // --- event.yaml ---
 /**
  * An immutable observed fact in the LAOCOON event log. Events are append-only and are never edited; a correction is a new compensating event. Everything else in the system (graphs, measures, the site) is a regenerable projection of this log.
@@ -156,6 +275,94 @@ export interface ObservationSuperseded {
   reason: "content_changed" | "uid_validity_changed";
 }
 
+// --- private-event.yaml ---
+/**
+ * An immutable observed fact that must never be published. Same append-only discipline as the public log, different destination: `private/events/`, which is gitignored.
+ * These events exist because identity resolution de-pseudonymises. A record saying "sender_id X is datatracker person 105857" turns the public log's hashes into named individuals, and PROBLEM.md section 7 keeps any label attached to a named individual out of publication. Nothing derived from this log may be published except as an aggregate that names nobody.
+ * The community-conferred seed is computed from these facts. The seed *rule* is published (docs/seed-rule.md); the seed *membership* is not, and does not have to be — anyone can recompute it from the published rule and the same public datatracker API, which is what makes it contestable.
+ */
+export type PrivateEvent = {
+  [k: string]: unknown;
+} & {
+  /**
+   * SHA-256 over canonical JSON of {event_type, payload}. Idempotency key.
+   */
+  event_id: string;
+  event_type: "SenderResolved" | "DatatrackerRecordFetched";
+  schema_version: string;
+  observed_at: string;
+  source: PrivateSourceRef;
+  payload: SenderResolved | DatatrackerRecordFetched;
+};
+
+export interface PrivateSourceRef {
+  kind: "datatracker" | "fixture";
+  name: string;
+  mailbox?: string;
+}
+/**
+ * An address seen on a list, mapped to a datatracker person — or explicitly mapped to nothing. "No datatracker record" is recorded as a fact, never as an inference about why, per PROBLEM.md section 8.
+ */
+export interface SenderResolved {
+  /**
+   * The hash that appears in the public log. The join key.
+   */
+  sender_id: string;
+  /**
+   * Plaintext, and the reason this log is gitignored.
+   */
+  address: string;
+  person_id: number | null;
+  resolution: "matched" | "no_record";
+  /**
+   * The datatracker `origin` field for the address, verbatim — it states how the address entered the system, e.g. "author: draft-foo-bar". It is recorded because it is informative, and deliberately NOT used by the seed rule: an individual submission is self-conferred standing.
+   */
+  origin: string;
+}
+/**
+ * What the datatracker said about one person at one moment. Facts only; the seed rule is applied later, as a projection, so re-deciding the rule never requires re-crawling and never rewrites history.
+ */
+export interface DatatrackerRecordFetched {
+  person_id: number;
+  fetched_at: string;
+  /**
+   * Current and historic chair roles, with the group's type resolved.
+   */
+  chair_roles: RoleFact[];
+  ad_roles: RoleFact[];
+  iab_iesg_roles: RoleFact[];
+  /**
+   * Count of documents of type rfc this person is an author of.
+   */
+  rfc_authorships: number;
+  /**
+   * Names of documents whose group is a working group AND whose name starts with "draft-ietf-", capped at 10. Names are kept rather than a bare count so the adopted-document test is applied to the actual name instead of trusting the group filter as a proxy for adoption.
+   */
+  wg_document_authorships: string[];
+  /**
+   * The API paths this record was assembled from, for audit.
+   */
+  endpoints: string[];
+}
+/**
+ * One role, recorded as the query that found it rather than as a resolved group object. The datatracker can filter roles by group type and acronym directly, so the group's type is known by construction and no extra per-group request is made.
+ */
+export interface RoleFact {
+  role: string;
+  /**
+   * The group or grouphistory resource URI the role points at.
+   */
+  group_ref: string;
+  /**
+   * Known from the filter that matched: "wg" for the WG-chair query, "iab_or_iesg" for the IAB/IESG query, "" when the query did not constrain the group type (the AD query).
+   */
+  group_type: string;
+  /**
+   * true from the role endpoint, false from rolehistory.
+   */
+  current: boolean;
+}
+
 // --- reply-graph.yaml ---
 /**
  * A projection of the event log: the directed reply graph for one or more lists, plus the coverage it was built from and the diagnostics that say how complete it is. This artifact is derived and regenerable. It is never authoritative and is never committed; delete it and re-run the projection.
@@ -167,6 +374,10 @@ export interface ReplyGraph {
    * Present so no consumer can mistake this file for a source of truth.
    */
   derived: true;
+  /**
+   * This artifact must not be published. Its nodes carry `sender_id`, from which anyone could compute per-account reply counts and centrality — a ranked participant list, which PROBLEM.md section 7 keeps private. It is the substrate the publishable thread-level measures are derived from, not a publishable object itself. A publishing step must refuse any artifact whose `publication` is `private`.
+   */
+  publication: "private";
   generated_at: string;
   generator: {
     name: string;
@@ -249,6 +460,9 @@ export interface ReplyGraph {
      */
     distinct_senders: number;
     max_depth: number;
+    /**
+     * reply_pairs divided by the number of messages in this thread that received at least one reply. 0 for a thread with no replies. A high value is a thread that fanned out; a value near 1 is a chain.
+     */
     mean_branching_factor: number;
     started_at: string | null;
     last_message_at: string | null;
@@ -291,5 +505,60 @@ export interface ReplyGraph {
      */
     isolated_messages: number;
   };
+}
+
+// --- seed.yaml ---
+/**
+ * The community-conferred seed set: the accounts reputation propagation starts from. A projection of the private log through the rule in `src/seed/rule.ts`, which is published as prose in `docs/seed-rule.md`.
+ * Private. Membership is a label attached to an identifiable person, and section 7 of PROBLEM.md keeps those out of publication. It does not need to be published to be contestable: the rule is public and the datatracker is public, so anyone can recompute this file and disagree with it.
+ * This is also the seam between the two runtimes. The rule lives in TypeScript and is applied here; the Python side consumes this artifact and never re-implements the rule, so the two cannot drift.
+ */
+export interface Seed {
+  schema_version: string;
+  derived: true;
+  publication: "private";
+  generated_at: string;
+  /**
+   * Version of the rule that produced this membership. Changing the rule changes this, and every artifact downstream records it.
+   */
+  seed_rule_version: string;
+  /**
+   * The funnel from list participants to seed members. `no_datatracker_record` is reported as a fact and never as an inference about why, per section 8.
+   */
+  counts: {
+    addresses_seen: number;
+    resolved_to_person: number;
+    no_datatracker_record: number;
+    /**
+     * Resolved people whose datatracker record has been fetched.
+     */
+    records_available: number;
+    seeded: number;
+    unseeded: number;
+  };
+  /**
+   * How many members each clause of the rule accounted for.
+   */
+  clause_counts?: {
+    [k: string]: number;
+  };
+  members: {
+    sender_id: string;
+    person_id: number;
+    /**
+     * Every clause of the rule that matched, so a verdict is explainable clause by clause rather than as a bare boolean.
+     *
+     * @minItems 1
+     */
+    clauses: [string, ...string[]];
+  }[];
+  /**
+   * Accounts the rule did not seed, and why not — whether they were never resolved, have no datatracker record, or have one that no clause matched. Recorded so "not seeded" is never silently the same as "not looked at".
+   */
+  unseeded: {
+    sender_id: string;
+    person_id?: number | null;
+    reason: "not_resolved" | "no_datatracker_record" | "record_missing" | "no_clause_matched";
+  }[];
 }
 

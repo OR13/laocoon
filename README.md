@@ -32,21 +32,32 @@ published versus kept private. It is the contract this project is built against.
 
 ## Status
 
-Phase 1 built: schema and codegen, the append-only event store, ingestion of the
-`agentproto` corpus, and the reply graph. 106 of the 106 messages in the IMAP
-mailbox are in the log, with no fetch or parse failures. No measures are
-published, no scores exist, and the site is not up.
+Phases 1 and 2 built. Nothing is published, and the site is not up.
 
-The phase-1 write-up — what was measured, what was decided, and what was not
-checked — is [`docs/phase-1.md`](docs/phase-1.md).
+- **Phase 1** — schema and codegen, the append-only event store, ingestion, the
+  reply graph. 106 of the 106 messages in the IMAP mailbox are in the log, no
+  fetch or parse failures. [`docs/phase-1.md`](docs/phase-1.md).
+- **Phase 2** — identity resolution against the Datatracker, the
+  community-conferred seed, reputation propagation, cluster detection. 11 of 28
+  accounts seeded. No mutually-reinforcing isolated cluster exists in this
+  corpus — the honest result is that there is nothing there to find yet.
+  [`docs/phase-2.md`](docs/phase-2.md).
+
+The seed rule is published in full: [`docs/seed-rule.md`](docs/seed-rule.md).
 
 ```
 bun install
 LAOCOON_IMAP_EMAIL=you@example.org bun run ingest --list agentproto
 bun run graph --list agentproto
+bun run resolve && bun run seed && bun run reputation --list agentproto
 bun run stats
 bun run check          # typecheck, Bun tests, pytest
 ```
+
+Per-person data — addresses, Datatracker identities, reputation scores, seed
+membership — is written only under `private/`, which is gitignored. Artifacts
+declare a `publication` field, and the publishing path refuses anything marked
+`private`.
 
 ## Corrections
 

@@ -5,22 +5,30 @@
  * the way in, against the generated JSON Schema — the same artifact the Python
  * side reads — rather than against a hand-written TypeScript guard that could
  * drift from it.
+ *
+ * Which schema is a parameter, because there are two logs. The public log at
+ * `events/` accepts observations of the mailing list; the private log at
+ * `private/events/` accepts identity resolution, which PROBLEM.md section 7
+ * keeps out of anything published. Giving each store its own schema means the
+ * separation is enforced by validation rather than by remembering.
  */
 // The schemas declare draft 2020-12, so the draft-07 default export will not do.
 import Ajv2020, { type ValidateFunction } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
-import type { Event } from "../schema/generated.ts";
 import { repoPath } from "../lib/paths.ts";
 
-let cached: ValidateFunction | undefined;
+const cache = new Map<string, ValidateFunction>();
 
-async function validator(): Promise<ValidateFunction> {
-  if (cached) return cached;
-  const schema = await Bun.file(repoPath("schemas", "generated", "event.json")).json();
+/** Compile (once) the generated schema of the given name, e.g. "event". */
+export async function schemaValidator(name: string): Promise<ValidateFunction> {
+  const existing = cache.get(name);
+  if (existing) return existing;
+  const schema = await Bun.file(repoPath("schemas", "generated", `${name}.json`)).json();
   const ajv = new Ajv2020({ allErrors: true, strict: false });
   addFormats(ajv);
-  cached = ajv.compile(schema);
-  return cached;
+  const validate = ajv.compile(schema);
+  cache.set(name, validate);
+  return validate;
 }
 
 export class EventValidationError extends Error {
@@ -30,13 +38,14 @@ export class EventValidationError extends Error {
   }
 }
 
-export async function assertValidEvent(event: unknown): Promise<Event> {
-  const validate = await validator();
-  if (!validate(event)) {
+/** Throw unless `value` matches the named generated schema. */
+export async function assertValid<T>(schemaName: string, value: unknown): Promise<T> {
+  const validate = await schemaValidator(schemaName);
+  if (!validate(value)) {
     const errors = (validate.errors ?? []).map(
       (e) => `${e.instancePath || "/"} ${e.message ?? "invalid"}`,
     );
     throw new EventValidationError(errors);
   }
-  return event as Event;
+  return value as T;
 }

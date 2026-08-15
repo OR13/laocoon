@@ -121,6 +121,7 @@ class ReplyGraph:
 
     schema_version: str
     derived: Literal[True]
+    publication: Literal['private']
     generated_at: str
     generator: Generator
     coverage: Coverage
