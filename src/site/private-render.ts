@@ -39,22 +39,20 @@ export interface SenderRow {
   core_number: number | null;
   x: number;
   y: number;
+  r: number;
 }
 
 export interface SenderView {
   publication: string;
   generated_at: string;
   layout_seed: number;
+  canvas: { width: number; height: number; padding: number; isolated_band: number };
   self_reply_edges_dropped: number;
   senders: SenderRow[];
   edges: { source: string; target: string; replies: number; quoting: number }[];
   threads: { thread_id: string; subject: string; message_count: number }[];
   matrix: { sender_id: string; thread_id: string; messages: number }[];
 }
-
-const W = 1120;
-const H = 620;
-const PAD = 54;
 
 const STYLE = `
 :root{
@@ -109,11 +107,88 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);
   color:var(--ink3);font-size:.82rem}
 `;
 
-/** Node radius from message count: area proportional, so 4x messages = 4x area. */
-function radius(messages: number, max: number): number {
-  const min = 4.5;
-  const span = 17;
-  return min + span * Math.sqrt(messages / Math.max(1, max));
+const LABEL_PX = 11.5;
+/** Mean advance width of the label font at LABEL_PX, measured empirically. */
+const CHAR_W = 6.1;
+const LABEL_H = 13;
+
+interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+const overlaps = (a: Box, b: Box): boolean =>
+  a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+
+/**
+ * Place each label in the least-colliding spot around its node.
+ *
+ * A single fixed offset put 108 of 378 label pairs on top of each other. This
+ * tries eight positions per label and keeps the best, working from the largest
+ * node down so the nodes a reader looks at first get first choice of position.
+ * Where nothing is free the label is still drawn — dropping it would silently
+ * hide a participant — but the caller can see the residual count.
+ */
+function placeLabels(
+  nodes: { id: string; cx: number; cy: number; r: number; text: string; weight: number }[],
+): { placed: Map<string, { x: number; y: number; anchor: string }>; collisions: number } {
+  const order = [...nodes].sort((a, b) => b.weight - a.weight || a.id.localeCompare(b.id));
+  const taken: Box[] = nodes.map((n) => ({
+    x0: n.cx - n.r,
+    y0: n.cy - n.r,
+    x1: n.cx + n.r,
+    y1: n.cy + n.r,
+  }));
+  const placed = new Map<string, { x: number; y: number; anchor: string }>();
+  let collisions = 0;
+
+  for (const n of order) {
+    const w = n.text.length * CHAR_W;
+    const gap = n.r + 5;
+    // Below, above, right, left, then the four diagonals.
+    const candidates: { x: number; y: number; anchor: string }[] = [
+      { x: n.cx, y: n.cy + gap + LABEL_H * 0.75, anchor: "middle" },
+      { x: n.cx, y: n.cy - gap - 2, anchor: "middle" },
+      { x: n.cx + gap, y: n.cy + 4, anchor: "start" },
+      { x: n.cx - gap, y: n.cy + 4, anchor: "end" },
+      { x: n.cx + gap * 0.8, y: n.cy + gap + LABEL_H * 0.6, anchor: "start" },
+      { x: n.cx - gap * 0.8, y: n.cy + gap + LABEL_H * 0.6, anchor: "end" },
+      { x: n.cx + gap * 0.8, y: n.cy - gap, anchor: "start" },
+      { x: n.cx - gap * 0.8, y: n.cy - gap, anchor: "end" },
+    ];
+
+    let best = candidates[0]!;
+    let bestHits = Number.POSITIVE_INFINITY;
+    for (const c of candidates) {
+      const x0 = c.anchor === "middle" ? c.x - w / 2 : c.anchor === "start" ? c.x : c.x - w;
+      const box: Box = { x0, y0: c.y - LABEL_H, x1: x0 + w, y1: c.y + 2 };
+      const hits = taken.reduce((n2, b) => n2 + (overlaps(box, b) ? 1 : 0), 0);
+      if (hits < bestHits) {
+        bestHits = hits;
+        best = c;
+        if (hits === 0) break;
+      }
+    }
+    const x0 =
+      best.anchor === "middle" ? best.x - w / 2 : best.anchor === "start" ? best.x : best.x - w;
+    taken.push({ x0, y0: best.y - LABEL_H, x1: x0 + w, y1: best.y + 2 });
+    if (bestHits > 0) collisions += bestHits;
+    placed.set(n.id, best);
+  }
+  return { placed, collisions };
+}
+
+/** Surname, or the local part of the address — full name is in the table. */
+export function shortLabel(name: string): string {
+  const cleaned = name.replace(/\s*\((IETF|ietf)\)\s*/g, " ").replace(/["']/g, "").trim();
+  if (!cleaned) return "";
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0]!.slice(0, 18);
+  const last = parts[parts.length - 1]!;
+  // "Kuehlewind" is more identifying than "Mirja"; keep an initial for context.
+  return `${parts[0]![0]}. ${last}`.slice(0, 20);
 }
 
 export function renderPrivateView(
@@ -129,23 +204,20 @@ export function renderPrivateView(
   };
 
   const byId = new Map(view.senders.map((s) => [s.sender_id, s]));
-  const maxMessages = Math.max(...view.senders.map((s) => s.messages), 1);
+  const { width: W, height: H } = view.canvas;
   const maxReplies = Math.max(...view.edges.map((e) => e.replies), 1);
 
-  const px = (s: SenderRow): number => PAD + s.x * (W - 2 * PAD);
-  const py = (s: SenderRow): number => PAD + s.y * (H - 2 * PAD);
-
-  // Edges first so nodes sit on top of them.
+  // Edges first, so nodes and labels sit on top of them.
   const edgeMarks = view.edges
     .map((e) => {
       const a = byId.get(e.source);
       const b = byId.get(e.target);
       if (!a || !b) return "";
-      const width = 0.7 + 2.6 * (e.replies / maxReplies);
-      const opacity = 0.22 + 0.4 * (e.replies / maxReplies);
+      const share = e.replies / maxReplies;
+      const width = 0.8 + 3.4 * share;
+      const opacity = 0.16 + 0.44 * share;
       return (
-        `<line x1="${px(a).toFixed(1)}" y1="${py(a).toFixed(1)}" ` +
-        `x2="${px(b).toFixed(1)}" y2="${py(b).toFixed(1)}" ` +
+        `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" ` +
         `stroke="var(--ink2)" stroke-opacity="${opacity.toFixed(2)}" ` +
         `stroke-width="${width.toFixed(2)}" stroke-linecap="round"><title>` +
         `${esc(label(e.source))} → ${esc(label(e.target))}: ${e.replies} ` +
@@ -154,19 +226,43 @@ export function renderPrivateView(
     })
     .join("\n");
 
+  const { placed, collisions } = placeLabels(
+    view.senders.map((s) => ({
+      id: s.sender_id,
+      cx: s.x,
+      cy: s.y,
+      r: s.r,
+      text: shortLabel(label(s.sender_id)),
+      weight: s.messages,
+    })),
+  );
+
   const nodeMarks = view.senders
     .map((s) => {
-      const r = radius(s.messages, maxMessages);
       const fill = s.seeded ? "var(--series-1)" : "var(--panel)";
       const title =
         `${label(s.sender_id)} — ${s.messages} messages in ${s.threads_participated} threads; ` +
         `${s.replies_sent} replies sent, ${s.replies_received} received; ` +
         `${s.seeded ? "community-conferred standing" : "no standing under the seed rule"}`;
       return (
-        `<g><circle cx="${px(s).toFixed(1)}" cy="${py(s).toFixed(1)}" r="${r.toFixed(1)}" ` +
-        `fill="${fill}" stroke="var(--series-1)" stroke-width="1.8"><title>${esc(title)}</title></circle>` +
-        `<text x="${px(s).toFixed(1)}" y="${(py(s) + r + 11).toFixed(1)}" text-anchor="middle" ` +
-        `font-size="10.5" fill="var(--ink2)">${esc(label(s.sender_id))}</text></g>`
+        `<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${fill}" ` +
+        `stroke="var(--series-1)" stroke-width="2"><title>${esc(title)}</title></circle>`
+      );
+    })
+    .join("\n");
+
+  // Labels last, each with a halo of the panel colour so it stays readable
+  // where it crosses an edge. paint-order puts the stroke behind the glyph.
+  const labelMarks = view.senders
+    .map((s) => {
+      const at = placed.get(s.sender_id);
+      if (!at) return "";
+      const text = shortLabel(label(s.sender_id));
+      if (!text) return "";
+      return (
+        `<text x="${at.x.toFixed(1)}" y="${at.y.toFixed(1)}" text-anchor="${at.anchor}" ` +
+        `font-size="${LABEL_PX}" fill="var(--ink)" stroke="var(--panel)" stroke-width="3.5" ` +
+        `paint-order="stroke" stroke-linejoin="round">${esc(text)}</text>`
       );
     })
     .join("\n");
@@ -250,6 +346,7 @@ export function renderPrivateView(
 <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Force-directed graph of senders connected by replies">
 ${edgeMarks}
 ${nodeMarks}
+${labelMarks}
 </svg>
 </div>
 <div class="legend">
@@ -265,7 +362,9 @@ picture. The ${isolated} accounts along the bottom have no reply edges at all �
 they posted and drew no reply, and replied to nobody; the solver would otherwise
 fling them to the margins as if that were meaningful.
 ${view.self_reply_edges_dropped} self-replies are excluded: answering your own
-message is not evidence of anyone else's engagement.</figcaption>
+message is not evidence of anyone else's engagement.
+Labels are shortened to an initial and surname; the full name and address are in
+the table below.${collisions > 0 ? ` ${collisions} label${collisions === 1 ? "" : "s"} could not be placed entirely clear of a neighbour.` : " Every label is placed clear of every other."}</figcaption>
 </figure>
 
 <h2>Who was in which thread</h2>
