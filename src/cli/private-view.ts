@@ -45,6 +45,7 @@ const proc = Bun.spawn(
     "--events", repoPath("events"),
     "--seed", seedPath,
     "--reputation", join(PRIVATE_DIR, "artifacts", "reputation.json"),
+    "--measures", repoPath("artifacts", "thread-measures.json"),
     "--out", artifactPath,
   ],
   { stdout: "pipe", stderr: "inherit" },
@@ -71,19 +72,29 @@ if (await book.exists()) {
   }
 }
 
-const html = renderPrivateView(view, names, escapeHtml);
+// Cytoscape and fCoSE are bundled into the page. The view must open from disk
+// with no server and no network, so nothing is loaded from a CDN.
+const bundlePath = repoPath("src", "site", "vendor", "graph-bundle.js");
+if (!(await Bun.file(bundlePath).exists())) {
+  throw new Error(
+    `no ${bundlePath}: run \`bun run bundle:graph\` (bun build of src/site/vendor/graph-bundle.entry.ts)`,
+  );
+}
+const bundle = await Bun.file(bundlePath).text();
+const html = renderPrivateView(view, names, escapeHtml, bundle);
 await mkdir(join(PRIVATE_DIR, "views"), { recursive: true });
 await Bun.write(outPath, html);
 
-const named = view.senders.filter((s) => names.has(s.sender_id)).length;
+const named = view.persons.filter((p) => names.has(p.id)).length;
 console.log(
   JSON.stringify(
     {
       out: outPath,
-      senders: view.senders.length,
+      persons: view.persons.length,
       with_a_name: named,
-      edges: view.edges.length,
       threads: view.threads.length,
+      participation_edges: view.participation.length,
+      reply_edges: view.replies.length,
     },
     null,
     2,
