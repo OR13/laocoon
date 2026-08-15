@@ -144,12 +144,14 @@ the accuracy figure would be a lie.
 
 ## Not done, and not checked
 
-- **The 31b pass was still running** when this was written, so the 12b/31b
-  disagreement rate — §6's substitute for hand labelling — is not yet known. Run
-  `bun run agreement` once it finishes.
+- **The agreement rate is 97.6% and it validates nothing.** The two models agreed
+  on 80 of 82 replies. That number looks reassuring and is not: two models that
+  both answer "substantive" to almost everything agree perfectly while telling
+  you nothing. §6 offers model disagreement as the substitute for hand labelling,
+  and on a degenerate measure the substitute is degenerate too. Both models are
+  `gemma4`, so a shared bias is exactly the failure this cannot see.
 - **No human ever checked a verdict.** §6 rules out the hand labelling that would
-  be needed. Model disagreement is the only proxy, and if both models share the
-  same bias toward "substantive" it will not show up.
+  be needed.
 - **The `hollow` definition is untested** because nothing in this corpus matched
   it. It may be too narrow; there is no way to tell from here.
 - **Origins overlap**, so the evaluations are correlated. The p-values are
