@@ -4,41 +4,24 @@ import { TimeRangeProvider } from "@/components/time-range";
 import { Dashboard } from "@/components/dashboard";
 import { Explorer } from "@/components/explorer";
 import type { GraphSource } from "@/lib/graph-model";
+import { archiveListUrl, archiveMessageUrl } from "@/lib/archive";
 import { loadPublic } from "@/lib/data";
 
 export default async function OverviewPage() {
-  const { activity, windows, structure, forecasts, measures, topics } = await loadPublic();
+  const { activity, windows, structure, forecasts, measures, trees } = await loadPublic();
 
-  // Public build: topics and threads only. No person node, no participation
-  // edge — the whole point of the tier split is that the structure is
-  // publishable while the people are not.
-  const primary = topics.find((t) => t.list_name === "agentproto") ?? topics[0];
+  // The list with a usable topic partition leads. agentproto's 23 threads are
+  // all about one charter, so its clustering is refused rather than forced —
+  // showing an empty graph there would be worse than showing the list that has
+  // structure.
+  const tree =
+    trees.find((t) => t.topics.length > 0) ?? trees.find((t) => t.list_name === "agentproto") ?? null;
+
   const topicOfThread = new Map<string, string>();
-  primary?.topics.forEach((topic) => topic.threads.forEach((id) => topicOfThread.set(id, topic.id)));
-  const graphSource: GraphSource | null = primary
-    ? {
-        topics: primary.topics.map((topic) => ({
-          ...topic,
-          median_novelty:
-            topic.threads
-              .map((id) => primary.thread_novelty[id]?.median ?? null)
-              .filter((v): v is number => v !== null)
-              .sort((a, b) => a - b)[Math.floor(topic.threads.length / 2)] ?? null,
-        })),
-        threads: measures.map((m) => ({
-          id: m.thread_id,
-          topic_id: topicOfThread.get(m.thread_id) ?? null,
-          subject: m.subject,
-          message_count: m.messages_total,
-          distinct_senders: m.distinct_senders,
-          last_message_at: null,
-          median_novelty: primary.thread_novelty[m.thread_id]?.median ?? null,
-        })),
-        persons: [],
-        participation: [],
-        replies: [],
-      }
-    : null;
+  tree?.topics.forEach((topic) => topic.threads.forEach((id) => topicOfThread.set(id, topic.id)));
+  const novelty = (id: string) =>
+    tree?.threads.find((t) => t.id === id)?.median_novelty ?? null;
+
   const last = windows[windows.length - 1];
 
   const baseline7 = forecasts.filter((f) => f.horizon_days === 7 && f.is_baseline);
@@ -46,6 +29,35 @@ export default async function OverviewPage() {
   const medianBaseline =
     defined.length > 0 ? [...defined].sort((a, b) => a - b)[Math.floor(defined.length / 2)]! : null;
   const unmeasured = measures.filter((m) => m.substantive_reply_ratio === null).length;
+
+  const graphSource: GraphSource | null = tree
+    ? {
+        topics: tree.topics.map((topic) => {
+          const vals = topic.threads
+            .map(novelty)
+            .filter((v): v is number => v !== null)
+            .sort((a, b) => a - b);
+          return {
+            ...topic,
+            median_novelty: vals.length ? vals[Math.floor(vals.length / 2)]! : null,
+          };
+        }),
+        threads: tree.threads.map((th) => ({
+          id: th.id,
+          topic_id: topicOfThread.get(th.id) ?? null,
+          subject: th.subject,
+          gist: th.gist,
+          href: archiveMessageUrl(th.id, tree.list_name),
+          message_count: th.message_count,
+          distinct_senders: th.distinct_senders,
+          last_message_at: th.last_message_at,
+          median_novelty: th.median_novelty,
+        })),
+        persons: [],
+        participation: [],
+        replies: [],
+      }
+    : null;
 
   return (
     <SiteShell
@@ -75,13 +87,32 @@ export default async function OverviewPage() {
 
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle className="text-base">Topics</CardTitle>
+              <CardTitle className="text-base">
+                Topics{tree ? ` — ${tree.list_name}` : ""}
+              </CardTitle>
               <CardDescription>
-                Threads clustered into topics by what they are about, because a thread is
-                not an argument — {primary ? primary.topics.length : 0} topics across{" "}
-                {measures.length} threads. Click a topic to expand it. Fill is median
-                novelty: how much of each reply said something the thread had not already
-                said.
+                {tree ? (
+                  <>
+                    {tree.topics.length} topics across {tree.threads.length} threads, with{" "}
+                    {tree.unassigned_threads.length} left unassigned rather than forced into
+                    one. Clusters are laid out apart; click a topic to expand it into its
+                    threads, then a thread for its opening line and a link into the{" "}
+                    <a
+                      className="text-primary underline"
+                      href={archiveListUrl(tree.list_name)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      mail archive
+                    </a>
+                    . Threshold {tree.chosen_threshold} was chosen by held-out prediction
+                    (ρ {tree.holdout_spearman}), beating subject matching (
+                    {tree.calibration.subject_baseline_holdout}) and a single cluster (
+                    {tree.calibration.single_cluster_holdout}).
+                  </>
+                ) : (
+                  "No usable topic partition yet."
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>

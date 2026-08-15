@@ -168,6 +168,49 @@ export interface TopicsArtifact {
   >;
 }
 
+export interface TopicTree {
+  publication: string;
+  list_name: string;
+  horizon_days: number;
+  chosen_threshold: number | null;
+  holdout_spearman: number | null;
+  calibration: {
+    subject_baseline_holdout: number | null;
+    single_cluster_holdout: number | null;
+    max_cluster_share: number;
+    trials: {
+      threshold: number;
+      clusters: number;
+      largest_cluster_share: number;
+      holdout_spearman: number | null;
+      rejected_as_blob: boolean;
+    }[];
+  };
+  topics: {
+    id: string;
+    parent_id: string;
+    label: string | null;
+    threads: string[];
+    thread_count: number;
+    message_count: number;
+    distinct_senders: number;
+    subjects: string[];
+    started_at: string | null;
+  }[];
+  threads: {
+    id: string;
+    subject: string;
+    gist: string;
+    message_count: number;
+    distinct_senders: number;
+    max_depth: number;
+    started_at: string | null;
+    last_message_at: string | null;
+    median_novelty: number | null;
+  }[];
+  unassigned_threads: string[];
+}
+
 export interface PublicData {
   measures: ThreadMeasure[];
   forecasts: Forecast[];
@@ -175,6 +218,7 @@ export interface PublicData {
   structure: CommunityStructure | null;
   activity: Activity | null;
   topics: TopicsArtifact[];
+  trees: TopicTree[];
 }
 
 export interface CommunityStructure {
@@ -265,7 +309,23 @@ export async function loadPublic(): Promise<PublicData> {
     }
   }
 
+  const trees: TopicTree[] = [];
+  for (const list of ["agentproto", "agent2agent"]) {
+    try {
+      const raw = JSON.parse(
+        await readFile(join(ARTIFACTS_DIR, `topic-tree-${list}.json`), "utf8"),
+      ) as TopicTree;
+      if (raw.publication !== "aggregate_public") {
+        throw new Error(`refusing topic-tree-${list}.json: publication is ${raw.publication}`);
+      }
+      trees.push(raw);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("refusing")) throw error;
+    }
+  }
+
   return {
+    trees,
     topics,
     activity,
     measures: [...latest.values()].sort(

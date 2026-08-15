@@ -19,6 +19,16 @@
 
 export type Tier = "topic" | "thread" | "message" | "person";
 
+/** Subject without the list tag or reply prefixes — a node label, not a header. */
+export function cleanSubject(subject: string): string {
+  return (
+    subject
+      .replace(/^\s*(\[[^\]]+\]\s*)+/g, "")
+      .replace(/^((Re|RE|Fwd|FWD|AW)\s*:\s*)+/g, "")
+      .trim() || subject
+  ).slice(0, 46);
+}
+
 export interface GraphNode {
   key: string;
   tier: Tier;
@@ -29,6 +39,10 @@ export interface GraphNode {
   intensity: number | null;
   /** Community-conferred standing, or a steward of this list. */
   standing?: "steward" | "seed" | "none";
+  /** Topic this node belongs to. Drives spatial clustering in the layout. */
+  cluster: string;
+  gist?: string;
+  href?: string;
   ref: string;
 }
 
@@ -64,6 +78,8 @@ export interface GraphSource {
     id: string;
     topic_id: string | null;
     subject: string;
+    gist?: string;
+    href?: string;
     message_count: number;
     distinct_senders: number;
     last_message_at: string | null;
@@ -112,11 +128,13 @@ export function buildView(
     expandedTopics: Set<string>;
     expandedThreads: Set<string>;
     showPeople: boolean;
+    showUnassigned?: boolean;
     threadIds?: Set<string>;
     maxMessages?: number;
   },
 ): GraphView {
   const { expandedTopics, expandedThreads, showPeople } = options;
+  const showUnassigned = options.showUnassigned ?? false;
   const inWindow = options.threadIds;
 
   const threads = source.threads.filter((t) => !inWindow || inWindow.has(t.id));
@@ -135,9 +153,10 @@ export function buildView(
     nodes.push({
       key: `topic:${topic.id}`,
       tier: "topic",
-      label: topic.label ?? topic.subjects[0] ?? topic.id,
+      label: topic.label ?? cleanSubject(topic.subjects[0] ?? topic.id),
       weight: topic.message_count,
       intensity: topicNovelty(topic.median_novelty),
+      cluster: topic.id,
       ref: topic.id,
     });
     if (!expandedTopics.has(topic.id)) continue;
@@ -154,21 +173,42 @@ export function buildView(
     }
   }
 
+  // A thread with no topic belongs with nothing, and there are 62 of them on
+  // agent2agent. Rendering them unconditionally buried the topics they were
+  // supposed to sit beside, so they are opt-in.
   const visibleThreads = threads.filter((t) =>
-    t.topic_id ? expandedTopics.has(t.topic_id) : true,
+    t.topic_id ? expandedTopics.has(t.topic_id) : showUnassigned,
   );
   for (const thread of visibleThreads) {
     nodes.push({
       key: `thread:${thread.id}`,
       tier: "thread",
-      label: thread.subject.replace(/^\[[^\]]+\]\s*/, "").slice(0, 44),
+      label: cleanSubject(thread.subject),
       weight: thread.message_count,
       intensity: threadNovelty(thread.median_novelty),
+      cluster: thread.topic_id ?? "unassigned",
+      gist: thread.gist,
+      href: thread.href,
       ref: thread.id,
     });
   }
 
   const visibleThreadIds = new Set(visibleThreads.map((t) => t.id));
+  const topicOfThread = new Map(source.threads.map((t) => [t.id, t.topic_id ?? "unassigned"]));
+  const byPerson = new Map<string, Map<string, number>>();
+  for (const p of source.participation) {
+    if (!visibleThreadIds.has(p.thread)) continue;
+    const counts = byPerson.get(p.person) ?? new Map<string, number>();
+    const key = topicOfThread.get(p.thread) ?? "unassigned";
+    counts.set(key, (counts.get(key) ?? 0) + p.messages);
+    byPerson.set(p.person, counts);
+  }
+  const dominantCluster = new Map(
+    [...byPerson].map(([id, counts]) => [
+      id,
+      [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]![0],
+    ]),
+  );
   const personIds = new Set<string>();
   if (showPeople) {
     for (const p of source.participation) {
@@ -191,6 +231,9 @@ export function buildView(
         weight: person.messages,
         intensity: personRep(person.reputation),
         standing: person.steward ? "steward" : person.seeded ? "seed" : "none",
+        // People sit with the topic they posted in most, so the layout groups
+        // them with the conversation they belong to rather than in a rim.
+        cluster: dominantCluster.get(person.id) ?? "people",
         ref: person.id,
       });
     }

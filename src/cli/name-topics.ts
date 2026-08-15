@@ -53,12 +53,16 @@ const ollama = new OllamaClient();
 const minThreads = Number(values["min-threads"]);
 
 for (const list of config.lists.filter((l) => l.enabled)) {
-  const path = join(ARTIFACTS_DIR, `topics-${list.name}.json`);
+  const path = join(ARTIFACTS_DIR, `topic-tree-${list.name}.json`);
   if (!(await Bun.file(path).exists())) continue;
   const artifact = (await Bun.file(path).json()) as {
     topics: { id: string; subjects: string[]; thread_count: number; label: string | null }[];
     topic_naming?: unknown;
   };
+  if (artifact.topics.length === 0) {
+    console.log(JSON.stringify({ list: list.name, topics: 0, note: "nothing to name" }));
+    continue;
+  }
 
   let named = 0;
   let inherited = 0;

@@ -19,7 +19,6 @@ import Graph from "graphology";
 import Sigma from "sigma";
 import { NodeSquareProgram } from "@sigma/node-square";
 import forceAtlas2 from "graphology-layout-forceatlas2";
-import circular from "graphology-layout/circular";
 import { useTheme } from "next-themes";
 import type { GraphEdge, GraphNode, GraphView, Tier } from "@/lib/graph-model";
 
@@ -114,6 +113,8 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
         ref: n.ref,
         intensity: n.intensity,
         standing: n.standing ?? "none",
+        cluster: n.cluster,
+        gist: n.gist ?? "",
         size: min + span * Math.sqrt(n.weight / (maxByTier.get(n.tier) ?? 1)),
         // Shape carries node type so the tiers survive greyscale.
         type: n.tier === "thread" ? "square" : "circle",
@@ -133,15 +134,30 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
 
     let renderer: Sigma;
     const started = performance.now();
-    circular.assign(graph, { scale: 10 });
+    // Seed each cluster at its own point on a ring before the force pass. A
+    // force layout from random positions mixes clusters together and then
+    // cannot separate them; seeding gives topics visibly distinct territory,
+    // which is the whole reason for clustering in the first place.
+    const clusters = [...new Set(view.nodes.map((n) => n.cluster))].sort();
+    const ring = new Map(
+      clusters.map((c, i) => {
+        const angle = (2 * Math.PI * i) / Math.max(1, clusters.length);
+        return [c, { x: Math.cos(angle) * 12, y: Math.sin(angle) * 12 }];
+      }),
+    );
+    graph.forEachNode((key, attrs) => {
+      const anchor = ring.get(attrs.cluster as string) ?? { x: 0, y: 0 };
+      graph.setNodeAttribute(key, "x", anchor.x + (Math.random() - 0.5) * 2.5);
+      graph.setNodeAttribute(key, "y", anchor.y + (Math.random() - 0.5) * 2.5);
+    });
     if (graph.order > 1) {
       forceAtlas2.assign(graph, {
         iterations: graph.order > 600 ? 120 : 300,
         settings: {
           ...forceAtlas2.inferSettings(graph),
           barnesHutOptimize: graph.order > 300,
-          gravity: 1.4,
-          scalingRatio: 12,
+          gravity: 0.6,
+          scalingRatio: 18,
           adjustSizes: true,
         },
       });

@@ -49,6 +49,7 @@ export function Explorer({
 }) {
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
   const [showPeople, setShowPeople] = useState(false);
+  const [showUnassigned, setShowUnassigned] = useState(false);
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [query, setQuery] = useState("");
 
@@ -58,8 +59,15 @@ export function Explorer({
   );
 
   const view = useMemo(
-    () => buildView(source, { expandedTopics, expandedThreads: new Set(), showPeople, threadIds }),
-    [source, expandedTopics, showPeople, threadIds],
+    () =>
+      buildView(source, {
+        expandedTopics,
+        expandedThreads: new Set(),
+        showPeople,
+        showUnassigned,
+        threadIds,
+      }),
+    [source, expandedTopics, showPeople, showUnassigned, threadIds],
   );
 
   const onSelect = useCallback((node: GraphNode | null) => {
@@ -117,6 +125,14 @@ export function Explorer({
         </Button>
         <Button size="sm" variant="outline" onClick={() => setExpandedTopics(new Set())}>
           Collapse
+        </Button>
+        <Button
+          size="sm"
+          variant={showUnassigned ? "default" : "outline"}
+          onClick={() => setShowUnassigned((v) => !v)}
+          title="Threads that belong with no topic"
+        >
+          Unassigned
         </Button>
         <Input
           className="h-8 w-56 text-xs"
@@ -187,6 +203,21 @@ export function Explorer({
             return (
               <div>
                 <h3 className="text-sm leading-snug font-semibold">{t.subject}</h3>
+                {t.gist && (
+                  <p className="text-muted-foreground mt-1 text-xs leading-snug italic">
+                    &ldquo;{t.gist}&rdquo;
+                  </p>
+                )}
+                {t.href && (
+                  <a
+                    href={t.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary mt-1 inline-block text-xs hover:underline"
+                  >
+                    Open in the IETF mail archive ↗
+                  </a>
+                )}
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
                   <Row label="Messages">{t.message_count}</Row>
                   <Row label="Participants">{t.distinct_senders}</Row>
