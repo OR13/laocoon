@@ -26,7 +26,7 @@ properties:
     description: SHA-256 over canonical JSON of {event_type, payload}. Idempotency key.
   event_type:
     type: string
-    enum: [SenderResolved, DatatrackerRecordFetched]
+    enum: [SenderResolved, DatatrackerRecordFetched, MessageClassified]
   schema_version:
     type: string
     pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
@@ -39,6 +39,7 @@ properties:
     oneOf:
       - $ref: "#/$defs/SenderResolved"
       - $ref: "#/$defs/DatatrackerRecordFetched"
+      - $ref: "#/$defs/MessageClassified"
 
 allOf:
   - if:
@@ -51,6 +52,11 @@ allOf:
       required: [event_type]
     then:
       properties: { payload: { $ref: "#/$defs/DatatrackerRecordFetched" } }
+  - if:
+      properties: { event_type: { const: MessageClassified } }
+      required: [event_type]
+    then:
+      properties: { payload: { $ref: "#/$defs/MessageClassified" } }
 
 $defs:
 
@@ -65,7 +71,7 @@ $defs:
     properties:
       kind:
         type: string
-        enum: [datatracker, fixture]
+        enum: [datatracker, ollama, fixture]
       name: { type: string }
       mailbox: { type: string }
 
@@ -167,3 +173,64 @@ $defs:
       current:
         type: boolean
         description: true from the role endpoint, false from rolehistory.
+
+  MessageClassified:
+    type: object
+    additionalProperties: false
+    description: >-
+      One model's verdict on whether one reply engages with the message it
+      answers. Private, and necessarily so: a per-message quality label joined to
+      the sender_id in the public log yields a per-person quality score in one
+      line, which PROBLEM.md section 7 forbids publishing. What gets published is
+      the per-thread ratio, carried by a `ThreadMeasured` event in the public log.
+
+      The verdict concerns the relationship between two texts and nothing else.
+      There is no field here, and no question in the prompt, about who wrote
+      either message or how. Recording a provenance judgement would be outside
+      what this project is allowed to do, not merely unused.
+
+      `body_sha256` ties the verdict to the exact text judged, so a re-observed
+      message whose body changed does not silently keep an obsolete label.
+    required:
+      - message_id
+      - list_name
+      - parent_message_id
+      - model
+      - prompt_hash
+      - prompt_version
+      - verdict
+      - reason
+      - body_sha256
+      - parent_body_sha256
+      - classified_at
+      - duration_ms
+    properties:
+      message_id: { type: string }
+      list_name: { type: string }
+      parent_message_id:
+        type: string
+        description: The message this reply was judged against.
+      model:
+        type: string
+        description: Ollama model tag, e.g. "gemma4:12b". Without it the series
+          silently stops being comparable across a model upgrade.
+      prompt_hash:
+        type: string
+        pattern: "^sha256:[0-9a-f]{64}$"
+        description: SHA-256 of the prompt template, not of the filled prompt, so
+          every message classified under one template shares one hash.
+      prompt_version: { type: string }
+      verdict:
+        type: string
+        enum: [substantive, hollow, unclear, error]
+        description: >-
+          `unclear` is the model declining to judge; `error` is the pipeline
+          failing to get an answer. They are different facts and are never
+          collapsed.
+      reason:
+        type: string
+        description: The model's short justification, kept for review. Private.
+      body_sha256: { type: string }
+      parent_body_sha256: { type: string }
+      classified_at: { type: string, format: date-time }
+      duration_ms: { type: integer }

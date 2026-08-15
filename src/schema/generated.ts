@@ -132,7 +132,8 @@ export type Event = {
    * SHA-256 over canonical JSON of {event_type, payload}. Idempotency key.
    */
   event_id: string;
-  event_type: "MessageObserved" | "CrawlWindowCompleted" | "ObservationSuperseded";
+  event_type:
+    "MessageObserved" | "CrawlWindowCompleted" | "ObservationSuperseded" | "ThreadMeasured" | "ForecastEvaluated";
   /**
    * Version of this schema the event was written against.
    */
@@ -142,7 +143,7 @@ export type Event = {
    */
   observed_at: string;
   source: SourceRef;
-  payload: MessageObserved | CrawlWindowCompleted | ObservationSuperseded;
+  payload: MessageObserved | CrawlWindowCompleted | ObservationSuperseded | ThreadMeasured | ForecastEvaluated;
 };
 /**
  * RFC 5322 msg-id with surrounding angle brackets and whitespace stripped. Case is preserved: msg-id comparison is case-sensitive in the local part.
@@ -162,7 +163,7 @@ export type ContentHash = string;
  * Where an observation came from. The crawler sits behind an interface; this records which implementation actually produced the fact.
  */
 export interface SourceRef {
-  kind: "imap" | "fixture";
+  kind: "imap" | "projection" | "fixture";
   /**
    * Implementation-specific source identity, e.g. "imap.ietf.org".
    */
@@ -274,6 +275,126 @@ export interface ObservationSuperseded {
   superseding_event_id: ContentHash;
   reason: "content_changed" | "uid_validity_changed";
 }
+/**
+ * The published measure vector for one thread, as of one data horizon.
+ * This is the only place a substance figure becomes public. The per-message verdicts it aggregates live in the private log, because a per-message quality label joined to the sender_id in this log would be a per-person quality score — forbidden by PROBLEM.md section 7. A per-thread ratio names nobody, and section 7 lists it as published.
+ * It is an event rather than a projection for one reason: the temporal holdout in section 6 scores at time T and checks at T+7d, which requires the figure computed at T to still exist at T+7d. A regenerated projection would silently become the figure computed later. `measured_at` is therefore the **data horizon** — the point in time the inputs were cut off at — not the wall clock, so recomputing the same horizon produces the same event id and appends nothing.
+ * Measures are a vector. There is no composite score here and there must not be one: PROBLEM.md section 7 rules it out, because a single number invites an argument about weights that cannot be won.
+ */
+export interface ThreadMeasured {
+  thread_id: string;
+  list_name: string;
+  /**
+   * Subject of the thread root, so a published measure is legible. Already public — it is in the IETF archive and in this repository's event log — and it names a discussion rather than a person.
+   */
+  subject: string;
+  /**
+   * Data horizon. Only messages sent at or before this are counted.
+   */
+  measured_at: string;
+  /**
+   * Recency window for the `*_in_window` fields.
+   */
+  window_days: number;
+  /**
+   * An account counts as a new participant if its first message on the list falls within this many days before `measured_at`.
+   */
+  new_participant_window_days: number;
+  messages_total: number;
+  /**
+   * A count. Which accounts took part is per-person and stays private.
+   */
+  distinct_senders: number;
+  max_depth: number;
+  reply_pairs: number;
+  mean_branching_factor: number;
+  messages_in_window: number;
+  distinct_senders_in_window: number;
+  /**
+   * Replies with a verdict from the reference model.
+   */
+  replies_classified: number;
+  substantive_replies: number;
+  hollow_replies: number;
+  /**
+   * The model declined to judge. Distinct from a pipeline error.
+   */
+  unclear_replies: number;
+  /**
+   * Replies with no verdict at all — not yet run, or the body was not cached. Reported so a partial classification cannot be mistaken for a thread of hollow replies.
+   */
+  unclassified_replies: number;
+  /**
+   * substantive / (substantive + hollow). Null when nothing was classified, never 0 — an unmeasured thread and a hollow thread are different facts.
+   */
+  substantive_reply_ratio: number | null;
+  /**
+   * Share of replies quoting at least one line. Mechanical, no model.
+   */
+  quoting_reply_ratio: number | null;
+  /**
+   * Count of participants holding community-conferred standing under the published seed rule. A count, never a list.
+   */
+  seeded_participants: number;
+  new_participants: number;
+  /**
+   * Described, never ranked, per PROBLEM.md section 8. On a list only weeks old this is near 1 for every thread and carries no information; it is published anyway rather than hidden, so the limitation is visible.
+   */
+  new_participant_share: number | null;
+  max_core_number: number;
+  mean_core_number: number;
+  /**
+   * Without these a historical series silently stops being comparable the first time a model or a prompt changes.
+   */
+  provenance: {
+    seed_rule_version: string;
+    /**
+     * The reference model whose verdicts the ratio is computed from.
+     */
+    classifier_model: string;
+    prompt_hash: string;
+    prompt_version: string;
+    generator: string;
+  };
+}
+/**
+ * The system scoring itself. PROBLEM.md section 6 converts validation into forecasting: rank threads at time T, then check at T+7d whether the engagement actually materialised. That is objectively scorable with no human input and no hand labelling.
+ * Every run records a baseline alongside the forecaster being tested. A correlation is meaningless without the trivial predictor to compare it to — if reputation-weighted engagement does not beat recent reply count, that is the finding, and it must be visible rather than absent.
+ */
+export interface ForecastEvaluated {
+  /**
+   * T. Only data at or before this was used to produce the ranking.
+   */
+  origin_at: string;
+  horizon_days: number;
+  /**
+   * Name of the ranking rule, defined in docs/holdout.md.
+   */
+  forecaster: string;
+  /**
+   * True for the trivial predictor the others are judged against.
+   */
+  is_baseline: boolean;
+  threads_scored: number;
+  /**
+   * Threads that actually received a reply in the horizon.
+   */
+  threads_with_engagement: number;
+  /**
+   * Rank correlation between predicted and actual. Null when there were too few threads to compute one.
+   */
+  spearman: number | null;
+  p_value: number | null;
+  /**
+   * Share of the three top-ranked threads that saw engagement.
+   */
+  precision_at_3: number | null;
+  /**
+   * What was measured at T+horizon, e.g. "replies_in_horizon".
+   */
+  actual_metric: string;
+  generator: string;
+}
 
 // --- private-event.yaml ---
 /**
@@ -288,15 +409,15 @@ export type PrivateEvent = {
    * SHA-256 over canonical JSON of {event_type, payload}. Idempotency key.
    */
   event_id: string;
-  event_type: "SenderResolved" | "DatatrackerRecordFetched";
+  event_type: "SenderResolved" | "DatatrackerRecordFetched" | "MessageClassified";
   schema_version: string;
   observed_at: string;
   source: PrivateSourceRef;
-  payload: SenderResolved | DatatrackerRecordFetched;
+  payload: SenderResolved | DatatrackerRecordFetched | MessageClassified;
 };
 
 export interface PrivateSourceRef {
-  kind: "datatracker" | "fixture";
+  kind: "datatracker" | "ollama" | "fixture";
   name: string;
   mailbox?: string;
 }
@@ -361,6 +482,40 @@ export interface RoleFact {
    * true from the role endpoint, false from rolehistory.
    */
   current: boolean;
+}
+/**
+ * One model's verdict on whether one reply engages with the message it answers. Private, and necessarily so: a per-message quality label joined to the sender_id in the public log yields a per-person quality score in one line, which PROBLEM.md section 7 forbids publishing. What gets published is the per-thread ratio, carried by a `ThreadMeasured` event in the public log.
+ * The verdict concerns the relationship between two texts and nothing else. There is no field here, and no question in the prompt, about who wrote either message or how. Recording a provenance judgement would be outside what this project is allowed to do, not merely unused.
+ * `body_sha256` ties the verdict to the exact text judged, so a re-observed message whose body changed does not silently keep an obsolete label.
+ */
+export interface MessageClassified {
+  message_id: string;
+  list_name: string;
+  /**
+   * The message this reply was judged against.
+   */
+  parent_message_id: string;
+  /**
+   * Ollama model tag, e.g. "gemma4:12b". Without it the series silently stops being comparable across a model upgrade.
+   */
+  model: string;
+  /**
+   * SHA-256 of the prompt template, not of the filled prompt, so every message classified under one template shares one hash.
+   */
+  prompt_hash: string;
+  prompt_version: string;
+  /**
+   * `unclear` is the model declining to judge; `error` is the pipeline failing to get an answer. They are different facts and are never collapsed.
+   */
+  verdict: "substantive" | "hollow" | "unclear" | "error";
+  /**
+   * The model's short justification, kept for review. Private.
+   */
+  reason: string;
+  body_sha256: string;
+  parent_body_sha256: string;
+  classified_at: string;
+  duration_ms: number;
 }
 
 // --- reply-graph.yaml ---

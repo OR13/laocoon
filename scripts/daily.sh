@@ -31,6 +31,17 @@ bun --cwd "$ROOT" run resolve
 bun --cwd "$ROOT" run seed
 bun --cwd "$ROOT" run reputation --list "$LIST"
 
+# Substance classification is local inference and is the slow step. It is
+# incremental: only replies with no verdict under the current prompt are sent to
+# a model. Verdicts stay in private/; only their per-thread aggregate is public.
+bun --cwd "$ROOT" run classify
+bun --cwd "$ROOT" run agreement
+bun --cwd "$ROOT" run measure --list "$LIST"
+bun --cwd "$ROOT" run holdout --list "$LIST"
+
+# Build the static site. Building is not publishing: nothing is deployed here.
+bun --cwd "$ROOT" run site
+
 bun --cwd "$ROOT" run stats
 
 # Committing is safe: the log is append-only and the working tree carries nothing

@@ -12,6 +12,8 @@ class EventType(StrEnum):
     MessageObserved = 'MessageObserved'
     CrawlWindowCompleted = 'CrawlWindowCompleted'
     ObservationSuperseded = 'ObservationSuperseded'
+    ThreadMeasured = 'ThreadMeasured'
+    ForecastEvaluated = 'ForecastEvaluated'
 
 
 ContentHash: TypeAlias = str
@@ -22,6 +24,7 @@ SenderId: TypeAlias = str
 
 class Kind(StrEnum):
     imap = 'imap'
+    projection = 'projection'
     fixture = 'fixture'
 
 
@@ -110,6 +113,76 @@ class ObservationSuperseded:
 
 
 @dataclass
+class Provenance:
+    """
+    Without these a historical series silently stops being comparable the first time a model or a prompt changes.
+    """
+
+    seed_rule_version: str
+    classifier_model: str
+    prompt_hash: str
+    prompt_version: str
+    generator: str
+
+
+@dataclass
+class ThreadMeasured:
+    """
+    The published measure vector for one thread, as of one data horizon.
+    This is the only place a substance figure becomes public. The per-message verdicts it aggregates live in the private log, because a per-message quality label joined to the sender_id in this log would be a per-person quality score — forbidden by PROBLEM.md section 7. A per-thread ratio names nobody, and section 7 lists it as published.
+    It is an event rather than a projection for one reason: the temporal holdout in section 6 scores at time T and checks at T+7d, which requires the figure computed at T to still exist at T+7d. A regenerated projection would silently become the figure computed later. `measured_at` is therefore the **data horizon** — the point in time the inputs were cut off at — not the wall clock, so recomputing the same horizon produces the same event id and appends nothing.
+    Measures are a vector. There is no composite score here and there must not be one: PROBLEM.md section 7 rules it out, because a single number invites an argument about weights that cannot be won.
+    """
+
+    thread_id: str
+    list_name: str
+    subject: str
+    measured_at: str
+    window_days: int
+    new_participant_window_days: int
+    messages_total: int
+    distinct_senders: int
+    max_depth: int
+    reply_pairs: int
+    mean_branching_factor: float
+    messages_in_window: int
+    distinct_senders_in_window: int
+    replies_classified: int
+    substantive_replies: int
+    hollow_replies: int
+    unclear_replies: int
+    unclassified_replies: int
+    substantive_reply_ratio: float | None
+    quoting_reply_ratio: float | None
+    seeded_participants: int
+    new_participants: int
+    new_participant_share: float | None
+    max_core_number: int
+    mean_core_number: float
+    provenance: Provenance
+
+
+@dataclass
+class ForecastEvaluated:
+    """
+    The system scoring itself. PROBLEM.md section 6 converts validation into forecasting: rank threads at time T, then check at T+7d whether the engagement actually materialised. That is objectively scorable with no human input and no hand labelling.
+    Every run records a baseline alongside the forecaster being tested. A correlation is meaningless without the trivial predictor to compare it to — if reputation-weighted engagement does not beat recent reply count, that is the finding, and it must be visible rather than absent.
+    """
+
+    origin_at: str
+    horizon_days: int
+    forecaster: str
+    is_baseline: bool
+    threads_scored: int
+    threads_with_engagement: int
+    spearman: float | None
+    p_value: float | None
+    precision_at_3: float | None
+    actual_metric: str
+    generator: str
+
+
+@dataclass
 class MessageObserved:
     """
     Structural facts about one message as seen in one mailbox. Message bodies are NOT stored here: only a digest and shape counts. The corpus is already published by the IETF; re-publishing it in this repository would add nothing and could not be undone, because the log is immutable.
@@ -140,4 +213,4 @@ class Event:
     schema_version: str
     observed_at: str
     source: SourceRef
-    payload: MessageObserved | CrawlWindowCompleted | ObservationSuperseded
+    payload: MessageObserved | CrawlWindowCompleted | ObservationSuperseded | ThreadMeasured | ForecastEvaluated

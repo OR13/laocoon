@@ -20,7 +20,7 @@ properties:
     description: SHA-256 over canonical JSON of {event_type, payload}. Idempotency key.
   event_type:
     type: string
-    enum: [MessageObserved, CrawlWindowCompleted, ObservationSuperseded]
+    enum: [MessageObserved, CrawlWindowCompleted, ObservationSuperseded, ThreadMeasured, ForecastEvaluated]
   schema_version:
     type: string
     pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
@@ -38,6 +38,8 @@ properties:
       - $ref: "#/$defs/MessageObserved"
       - $ref: "#/$defs/CrawlWindowCompleted"
       - $ref: "#/$defs/ObservationSuperseded"
+      - $ref: "#/$defs/ThreadMeasured"
+      - $ref: "#/$defs/ForecastEvaluated"
 
 allOf:
   - if:
@@ -55,6 +57,16 @@ allOf:
       required: [event_type]
     then:
       properties: { payload: { $ref: "#/$defs/ObservationSuperseded" } }
+  - if:
+      properties: { event_type: { const: ThreadMeasured } }
+      required: [event_type]
+    then:
+      properties: { payload: { $ref: "#/$defs/ThreadMeasured" } }
+  - if:
+      properties: { event_type: { const: ForecastEvaluated } }
+      required: [event_type]
+    then:
+      properties: { payload: { $ref: "#/$defs/ForecastEvaluated" } }
 
 $defs:
 
@@ -85,7 +97,7 @@ $defs:
     properties:
       kind:
         type: string
-        enum: [imap, fixture]
+        enum: [imap, projection, fixture]
       name:
         type: string
         description: Implementation-specific source identity, e.g. "imap.ietf.org".
@@ -266,3 +278,190 @@ $defs:
       reason:
         type: string
         enum: [content_changed, uid_validity_changed]
+
+  ThreadMeasured:
+    type: object
+    additionalProperties: false
+    description: >-
+      The published measure vector for one thread, as of one data horizon.
+
+      This is the only place a substance figure becomes public. The per-message
+      verdicts it aggregates live in the private log, because a per-message
+      quality label joined to the sender_id in this log would be a per-person
+      quality score — forbidden by PROBLEM.md section 7. A per-thread ratio names
+      nobody, and section 7 lists it as published.
+
+      It is an event rather than a projection for one reason: the temporal
+      holdout in section 6 scores at time T and checks at T+7d, which requires
+      the figure computed at T to still exist at T+7d. A regenerated projection
+      would silently become the figure computed later. `measured_at` is therefore
+      the **data horizon** — the point in time the inputs were cut off at — not
+      the wall clock, so recomputing the same horizon produces the same event id
+      and appends nothing.
+
+      Measures are a vector. There is no composite score here and there must not
+      be one: PROBLEM.md section 7 rules it out, because a single number invites
+      an argument about weights that cannot be won.
+    required:
+      - thread_id
+      - list_name
+      - subject
+      - measured_at
+      - window_days
+      - new_participant_window_days
+      - messages_total
+      - distinct_senders
+      - max_depth
+      - reply_pairs
+      - mean_branching_factor
+      - messages_in_window
+      - distinct_senders_in_window
+      - replies_classified
+      - substantive_replies
+      - hollow_replies
+      - unclear_replies
+      - unclassified_replies
+      - substantive_reply_ratio
+      - quoting_reply_ratio
+      - seeded_participants
+      - new_participants
+      - new_participant_share
+      - max_core_number
+      - mean_core_number
+      - provenance
+    properties:
+      thread_id: { type: string }
+      list_name: { type: string }
+      subject:
+        type: string
+        description: >-
+          Subject of the thread root, so a published measure is legible. Already
+          public — it is in the IETF archive and in this repository's event log —
+          and it names a discussion rather than a person.
+      measured_at:
+        type: string
+        format: date-time
+        description: Data horizon. Only messages sent at or before this are counted.
+      window_days:
+        type: integer
+        description: Recency window for the `*_in_window` fields.
+      new_participant_window_days:
+        type: integer
+        description: >-
+          An account counts as a new participant if its first message on the list
+          falls within this many days before `measured_at`.
+      messages_total: { type: integer }
+      distinct_senders:
+        type: integer
+        description: A count. Which accounts took part is per-person and stays private.
+      max_depth: { type: integer }
+      reply_pairs: { type: integer }
+      mean_branching_factor: { type: number }
+      messages_in_window: { type: integer }
+      distinct_senders_in_window: { type: integer }
+      replies_classified:
+        type: integer
+        description: Replies with a verdict from the reference model.
+      substantive_replies: { type: integer }
+      hollow_replies: { type: integer }
+      unclear_replies:
+        type: integer
+        description: The model declined to judge. Distinct from a pipeline error.
+      unclassified_replies:
+        type: integer
+        description: >-
+          Replies with no verdict at all — not yet run, or the body was not
+          cached. Reported so a partial classification cannot be mistaken for a
+          thread of hollow replies.
+      substantive_reply_ratio:
+        oneOf: [{ type: number }, { type: "null" }]
+        description: >-
+          substantive / (substantive + hollow). Null when nothing was classified,
+          never 0 — an unmeasured thread and a hollow thread are different facts.
+      quoting_reply_ratio:
+        oneOf: [{ type: number }, { type: "null" }]
+        description: Share of replies quoting at least one line. Mechanical, no model.
+      seeded_participants:
+        type: integer
+        description: >-
+          Count of participants holding community-conferred standing under the
+          published seed rule. A count, never a list.
+      new_participants: { type: integer }
+      new_participant_share:
+        oneOf: [{ type: number }, { type: "null" }]
+        description: >-
+          Described, never ranked, per PROBLEM.md section 8. On a list only weeks
+          old this is near 1 for every thread and carries no information; it is
+          published anyway rather than hidden, so the limitation is visible.
+      max_core_number: { type: integer }
+      mean_core_number: { type: number }
+      provenance:
+        type: object
+        additionalProperties: false
+        required: [seed_rule_version, classifier_model, prompt_hash, prompt_version, generator]
+        description: >-
+          Without these a historical series silently stops being comparable the
+          first time a model or a prompt changes.
+        properties:
+          seed_rule_version: { type: string }
+          classifier_model:
+            type: string
+            description: The reference model whose verdicts the ratio is computed from.
+          prompt_hash: { type: string }
+          prompt_version: { type: string }
+          generator: { type: string }
+
+  ForecastEvaluated:
+    type: object
+    additionalProperties: false
+    description: >-
+      The system scoring itself. PROBLEM.md section 6 converts validation into
+      forecasting: rank threads at time T, then check at T+7d whether the
+      engagement actually materialised. That is objectively scorable with no
+      human input and no hand labelling.
+
+      Every run records a baseline alongside the forecaster being tested. A
+      correlation is meaningless without the trivial predictor to compare it to —
+      if reputation-weighted engagement does not beat recent reply count, that is
+      the finding, and it must be visible rather than absent.
+    required:
+      - origin_at
+      - horizon_days
+      - forecaster
+      - is_baseline
+      - threads_scored
+      - threads_with_engagement
+      - spearman
+      - p_value
+      - precision_at_3
+      - actual_metric
+      - generator
+    properties:
+      origin_at:
+        type: string
+        format: date-time
+        description: T. Only data at or before this was used to produce the ranking.
+      horizon_days: { type: integer }
+      forecaster:
+        type: string
+        description: Name of the ranking rule, defined in docs/holdout.md.
+      is_baseline:
+        type: boolean
+        description: True for the trivial predictor the others are judged against.
+      threads_scored: { type: integer }
+      threads_with_engagement:
+        type: integer
+        description: Threads that actually received a reply in the horizon.
+      spearman:
+        oneOf: [{ type: number }, { type: "null" }]
+        description: Rank correlation between predicted and actual. Null when there
+          were too few threads to compute one.
+      p_value:
+        oneOf: [{ type: number }, { type: "null" }]
+      precision_at_3:
+        oneOf: [{ type: number }, { type: "null" }]
+        description: Share of the three top-ranked threads that saw engagement.
+      actual_metric:
+        type: string
+        description: What was measured at T+horizon, e.g. "replies_in_horizon".
+      generator: { type: string }

@@ -15,7 +15,12 @@
     "typecheck": "tsc --noEmit",
     "resolve": "bun run src/cli/resolve.ts",
     "reputation": "bun run src/cli/reputation.ts",
-    "seed": "bun run src/cli/seed.ts"
+    "seed": "bun run src/cli/seed.ts",
+    "classify": "bun run src/cli/classify.ts",
+    "measure": "bun run src/cli/measure.ts",
+    "holdout": "bun run src/cli/holdout.ts",
+    "agreement": "bun run src/cli/agreement.ts",
+    "site": "bun run src/cli/site.ts"
   },
   "dependencies": {
     "ajv": "^8.17.1",

@@ -5,12 +5,15 @@ import type {
   CrawlWindowCompleted,
   DatatrackerRecordFetched,
   Event,
+  ForecastEvaluated,
+  MessageClassified,
   MessageObserved,
   ObservationSuperseded,
   PrivateEvent,
   PrivateSourceRef,
   SenderResolved,
   SourceRef,
+  ThreadMeasured,
 } from "../schema/generated.ts";
 import { sha256Json } from "../lib/hash.ts";
 
@@ -23,7 +26,11 @@ type PayloadFor<T extends Event["event_type"]> = T extends "MessageObserved"
   ? MessageObserved
   : T extends "CrawlWindowCompleted"
     ? CrawlWindowCompleted
-    : ObservationSuperseded;
+    : T extends "ObservationSuperseded"
+      ? ObservationSuperseded
+      : T extends "ThreadMeasured"
+        ? ThreadMeasured
+        : ForecastEvaluated;
 
 /**
  * `event_id` covers `{event_type, payload}` and deliberately excludes
@@ -58,7 +65,9 @@ export const PRIVATE_EVENT_SCHEMA_VERSION = "1.0.0";
 
 type PrivatePayloadFor<T extends PrivateEvent["event_type"]> = T extends "SenderResolved"
   ? SenderResolved
-  : DatatrackerRecordFetched;
+  : T extends "DatatrackerRecordFetched"
+    ? DatatrackerRecordFetched
+    : MessageClassified;
 
 /**
  * The private log's constructor. Separate from {@link makeEvent} — not to avoid

@@ -11,6 +11,7 @@ from typing import TypeAlias
 class EventType(StrEnum):
     SenderResolved = 'SenderResolved'
     DatatrackerRecordFetched = 'DatatrackerRecordFetched'
+    MessageClassified = 'MessageClassified'
 
 
 ContentHash: TypeAlias = str
@@ -18,6 +19,7 @@ ContentHash: TypeAlias = str
 
 class Kind(StrEnum):
     datatracker = 'datatracker'
+    ollama = 'ollama'
     fixture = 'fixture'
 
 
@@ -58,6 +60,39 @@ class RoleFact:
     current: bool
 
 
+class Verdict(StrEnum):
+    """
+    `unclear` is the model declining to judge; `error` is the pipeline failing to get an answer. They are different facts and are never collapsed.
+    """
+
+    substantive = 'substantive'
+    hollow = 'hollow'
+    unclear = 'unclear'
+    error = 'error'
+
+
+@dataclass
+class MessageClassified:
+    """
+    One model's verdict on whether one reply engages with the message it answers. Private, and necessarily so: a per-message quality label joined to the sender_id in the public log yields a per-person quality score in one line, which PROBLEM.md section 7 forbids publishing. What gets published is the per-thread ratio, carried by a `ThreadMeasured` event in the public log.
+    The verdict concerns the relationship between two texts and nothing else. There is no field here, and no question in the prompt, about who wrote either message or how. Recording a provenance judgement would be outside what this project is allowed to do, not merely unused.
+    `body_sha256` ties the verdict to the exact text judged, so a re-observed message whose body changed does not silently keep an obsolete label.
+    """
+
+    message_id: str
+    list_name: str
+    parent_message_id: str
+    model: str
+    prompt_hash: str
+    prompt_version: str
+    verdict: Verdict
+    reason: str
+    body_sha256: str
+    parent_body_sha256: str
+    classified_at: str
+    duration_ms: int
+
+
 @dataclass
 class DatatrackerRecordFetched:
     """
@@ -87,4 +122,4 @@ class PrivateEvent:
     schema_version: str
     observed_at: str
     source: PrivateSourceRef
-    payload: SenderResolved | DatatrackerRecordFetched
+    payload: SenderResolved | DatatrackerRecordFetched | MessageClassified
