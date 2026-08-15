@@ -1,5 +1,7 @@
 import { Banner, SiteShell } from "@/components/site-shell";
-import { ParticipationGraph } from "@/components/participation-graph";
+import { Explorer } from "@/components/explorer";
+import type { GraphSource } from "@/lib/graph-model";
+import { loadPublic } from "@/lib/data";
 import { loadPrivate } from "@/lib/data";
 
 /**
@@ -13,7 +15,52 @@ import { loadPrivate } from "@/lib/data";
  */
 export default async function PrivateGraphPage() {
   const data = await loadPrivate();
+  const { topics, measures } = await loadPublic();
   const seeded = data.persons.filter((p) => p.seeded).length;
+
+  const primary = topics.find((t) => t.list_name === "agentproto") ?? topics[0];
+  const topicOfThread = new Map<string, string>();
+  primary?.topics.forEach((topic) => topic.threads.forEach((id) => topicOfThread.set(id, topic.id)));
+  const novelty = (id: string) => primary?.thread_novelty[id]?.median ?? null;
+
+  const source: GraphSource = {
+    topics: (primary?.topics ?? []).map((topic) => ({
+      ...topic,
+      median_novelty:
+        topic.threads
+          .map(novelty)
+          .filter((v): v is number => v !== null)
+          .sort((a, b) => a - b)[Math.floor(topic.threads.length / 2)] ?? null,
+    })),
+    threads: data.threads.map((t) => ({
+      id: t.id,
+      topic_id: topicOfThread.get(t.id) ?? null,
+      subject: t.subject,
+      message_count: t.message_count,
+      distinct_senders: t.distinct_senders,
+      last_message_at: t.last_message_at,
+      median_novelty: novelty(t.id),
+    })),
+    persons: data.persons.map((p) => ({
+      id: p.id,
+      label: p.full,
+      messages: p.messages,
+      reputation: p.ppr_replies,
+      seeded: p.seeded,
+      steward: false,
+    })),
+    participation: data.participation.map((e) => ({
+      person: e.person,
+      thread: e.thread,
+      messages: e.messages,
+    })),
+    replies: data.replies.map((e) => ({
+      source: e.source,
+      target: e.target,
+      replies: e.replies,
+    })),
+  };
+  void measures;
 
   return (
     <SiteShell
@@ -42,7 +89,7 @@ export default async function PrivateGraphPage() {
         </p>
       }
     >
-      <ParticipationGraph data={data} />
+      <Explorer source={source} named />
 
       <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-4 text-xs">
         <span className="flex items-center gap-1.5">

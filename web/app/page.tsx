@@ -2,11 +2,43 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ExperimentalBanner, PUBLIC_NAV, SiteShell } from "@/components/site-shell";
 import { TimeRangeProvider } from "@/components/time-range";
 import { Dashboard } from "@/components/dashboard";
-import { ThreadGraph } from "@/components/thread-graph";
+import { Explorer } from "@/components/explorer";
+import type { GraphSource } from "@/lib/graph-model";
 import { loadPublic } from "@/lib/data";
 
 export default async function OverviewPage() {
-  const { activity, windows, structure, forecasts, measures } = await loadPublic();
+  const { activity, windows, structure, forecasts, measures, topics } = await loadPublic();
+
+  // Public build: topics and threads only. No person node, no participation
+  // edge — the whole point of the tier split is that the structure is
+  // publishable while the people are not.
+  const primary = topics.find((t) => t.list_name === "agentproto") ?? topics[0];
+  const topicOfThread = new Map<string, string>();
+  primary?.topics.forEach((topic) => topic.threads.forEach((id) => topicOfThread.set(id, topic.id)));
+  const graphSource: GraphSource | null = primary
+    ? {
+        topics: primary.topics.map((topic) => ({
+          ...topic,
+          median_novelty:
+            topic.threads
+              .map((id) => primary.thread_novelty[id]?.median ?? null)
+              .filter((v): v is number => v !== null)
+              .sort((a, b) => a - b)[Math.floor(topic.threads.length / 2)] ?? null,
+        })),
+        threads: measures.map((m) => ({
+          id: m.thread_id,
+          topic_id: topicOfThread.get(m.thread_id) ?? null,
+          subject: m.subject,
+          message_count: m.messages_total,
+          distinct_senders: m.distinct_senders,
+          last_message_at: null,
+          median_novelty: primary.thread_novelty[m.thread_id]?.median ?? null,
+        })),
+        persons: [],
+        participation: [],
+        replies: [],
+      }
+    : null;
   const last = windows[windows.length - 1];
 
   const baseline7 = forecasts.filter((f) => f.horizon_days === 7 && f.is_baseline);
@@ -43,15 +75,23 @@ export default async function OverviewPage() {
 
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle className="text-base">Which discussions connect</CardTitle>
+              <CardTitle className="text-base">Topics</CardTitle>
               <CardDescription>
-                Threads active in the selected window. A link means the same people posted
-                in both — so a thread with no links is a conversation nobody carried
-                anywhere else.
+                Threads clustered into topics by what they are about, because a thread is
+                not an argument — {primary ? primary.topics.length : 0} topics across{" "}
+                {measures.length} threads. Click a topic to expand it. Fill is median
+                novelty: how much of each reply said something the thread had not already
+                said.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ThreadGraph activity={activity} />
+              {graphSource ? (
+                <Explorer source={graphSource} named={false} />
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  No topic clustering yet — run <code>bun run topics</code>.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TimeRangeProvider>

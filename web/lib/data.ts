@@ -140,12 +140,41 @@ export interface Activity {
   };
 }
 
+export interface TopicsArtifact {
+  publication: string;
+  list_name: string;
+  embed_model: string;
+  sentence_duplicate_at: number;
+  novelty_threshold_sweep: { duplicate_at: number; median: number | null }[];
+  clustering: {
+    chosen_threshold: number;
+    phi: number;
+    subject_baseline_phi: number;
+    beats_subject_baseline: boolean;
+  };
+  topics: {
+    id: string;
+    label: string | null;
+    threads: string[];
+    thread_count: number;
+    message_count: number;
+    distinct_senders: number;
+    subjects: string[];
+    started_at: string | null;
+  }[];
+  thread_novelty: Record<
+    string,
+    { scored: number; mean: number | null; median: number | null; median_length_adjusted: number | null }
+  >;
+}
+
 export interface PublicData {
   measures: ThreadMeasure[];
   forecasts: Forecast[];
   windows: CrawlWindow[];
   structure: CommunityStructure | null;
   activity: Activity | null;
+  topics: TopicsArtifact[];
 }
 
 export interface CommunityStructure {
@@ -221,7 +250,23 @@ export async function loadPublic(): Promise<PublicData> {
     if (error instanceof Error && error.message.startsWith("refusing")) throw error;
   }
 
+  const topics: TopicsArtifact[] = [];
+  for (const list of ["agentproto", "agent2agent"]) {
+    try {
+      const raw = JSON.parse(
+        await readFile(join(ARTIFACTS_DIR, `topics-${list}.json`), "utf8"),
+      ) as TopicsArtifact;
+      if (raw.publication !== "aggregate_public") {
+        throw new Error(`refusing topics-${list}.json: publication is ${raw.publication}`);
+      }
+      topics.push(raw);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("refusing")) throw error;
+    }
+  }
+
   return {
+    topics,
     activity,
     measures: [...latest.values()].sort(
       (a, b) => b.messages_total - a.messages_total || a.thread_id.localeCompare(b.thread_id),

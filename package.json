@@ -27,7 +27,8 @@
     "activity": "bun run src/cli/activity.ts",
     "stewards": "bun run src/cli/stewards.ts",
     "embed": "bun run src/cli/embed.ts",
-    "topics": "bun run src/cli/topics.ts"
+    "topics": "bun run src/cli/topics.ts",
+    "name-topics": "bun run src/cli/name-topics.ts"
   },
   "dependencies": {
     "ajv": "^8.17.1",

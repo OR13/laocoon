@@ -159,3 +159,54 @@ the accuracy figure would be a lie.
 - **One list, three weeks, 24 threads.** Every figure above would move on a
   larger corpus, and the 7-day horizon might become appropriate on a list with
   longer-lived threads.
+
+---
+
+## Addendum — the classifier replaced, and what the replacement does not fix
+
+`gemma4:12b` and `gemma4:31b` both returned essentially zero hollow replies, and
+their 97.6% agreement validated nothing, so the binary was replaced by a
+continuous **novelty** measure: the fraction of a reply's sentences that nothing
+earlier in the thread already said. 33,803 sentences across 1,266 messages,
+embedded locally with `nomic-embed-text`.
+
+Two wrong versions came first, both caught by testing the measure against
+quantities it must be independent of:
+
+| version | scored over | correlation with quoted fraction | with new-text lines |
+| --- | --- | ---: | ---: |
+| v1 | whole message body | **−0.32** | +0.09 |
+| v2 | authored text, whole | +0.35 | **−0.58** |
+| v3 | authored text, per sentence | +0.28 | −0.42 |
+
+v1 measured quoting habit. v2 measured brevity — a short passage embeds far from
+everything. v3 divides length out and is the one in use, with an explicitly
+length-regressed variant reported beside it. The residual −0.42 is not zero and
+is not claimed to be.
+
+**The absolute value means nothing.** Median novelty moves from 0.39 to 1.00 as
+the sentence-duplicate cutoff goes 0.65 → 0.85. Only the ranking under a fixed
+cutoff carries information, and the sweep is in the artifact so a reader can see
+that for themselves.
+
+## Addendum — topic clustering over-merges
+
+Topics beat subject-normalisation at predicting co-participation on both lists
+(φ 0.394 vs 0.140 on agentproto; 0.213 vs 0.101 on agent2agent), which is the
+test that was promised. They still are not good enough to use.
+
+On **agentproto** the calibration chose a threshold that put 19 of 24 threads and
+100 of 106 messages into one topic. On a small, densely connected list "one big
+cluster" trivially predicts co-participation, so the objective is degenerate at
+small *n* — the same failure shape as the classifier, in a different measure.
+
+On **agent2agent** φ falls monotonically as clusters merge (0.213 at 112 clusters
+→ 0.000 at 1), so calibration picks the tightest threshold — and even there one
+cluster holds 167 of 344 threads and 74% of the messages. That is average-linkage
+chaining, and no threshold fixes it.
+
+What this rules out: agglomerative clustering with average linkage and a single
+global threshold. What it suggests instead is hierarchical topics — a topic that
+contains sub-topics, which is what the corpus actually looks like — or a
+density-based method that is allowed to leave threads unassigned. Neither is
+built.
