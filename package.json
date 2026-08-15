@@ -1,0 +1,29 @@
+{
+  "name": "laocoon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Structural engagement measures for IETF mailing list discussions.",
+  "scripts": {
+    "codegen": "bun run src/cli/codegen.ts",
+    "ingest": "bun run src/cli/ingest.ts",
+    "graph": "bun run src/cli/graph.ts",
+    "stats": "bun run src/cli/stats.ts",
+    "test": "bun test",
+    "test:py": "uv run --directory python --with pytest pytest tests -q",
+    "check": "tsc --noEmit && bun test && uv run --directory python --with pytest pytest tests -q",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "mailparser": "^3.9.15",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "@types/mailparser": "^3.4.6",
+    "json-schema-to-typescript": "^15.0.4",
+    "typescript": "^5.9.2"
+  }
+}

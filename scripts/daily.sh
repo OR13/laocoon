@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Daily run: crawl, then rebuild the projections.
+#
+# 100% local — Bun and Python only, no hosted model, no token spend. Intended to
+# be driven by launchd, following the com.tradeverifyd.orie-morning-briefing
+# pattern. Not installed by this script: scheduling is the operator's decision.
+#
+#   LAOCOON_IMAP_EMAIL=you@example.org scripts/daily.sh
+#   LAOCOON_MODE=full scripts/daily.sh        # weekly reconciliation
+#
+# The repository root is resolved from this script's own location, never
+# hardcoded, so it works in a worktree and in a fresh clone.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LIST="${LAOCOON_LIST:-agentproto}"
+MODE="${LAOCOON_MODE:-incremental}"
+
+if [[ -z "${LAOCOON_IMAP_EMAIL:-}" ]]; then
+  echo "LAOCOON_IMAP_EMAIL must be set: anonymous IETF IMAP uses a contact address." >&2
+  exit 2
+fi
+
+bun --cwd "$ROOT" run ingest --list "$LIST" --mode "$MODE"
+bun --cwd "$ROOT" run graph --list "$LIST"
+bun --cwd "$ROOT" run stats
+
+# Committing is safe: the log is append-only and the working tree carries nothing
+# else. Pushing is not done here — this is a public repository and publishing is
+# an operator decision.
+if [[ -n "$(git -C "$ROOT" status --porcelain events)" ]]; then
+  git -C "$ROOT" add events
+  git -C "$ROOT" commit -m "Record $LIST crawl of $(date -u +%Y-%m-%d)"
+  echo "Committed. Not pushed: publishing is an operator decision."
+fi

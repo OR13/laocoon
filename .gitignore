@@ -3,6 +3,14 @@ node_modules/
 dist/
 .cache/
 *.local.json
+python/.venv/
+python/**/__pycache__/
+.pytest_cache/
+
+# Derived projections. Regenerating them is cheap; committing a full regenerated
+# graph on every run is exactly the daily-snapshot bloat PROBLEM.md section 9
+# forbids. Nothing here is authoritative — `bun run graph` rebuilds it.
+artifacts/
 
 # Private view: per-person scores and rankings stay off the public repo.
 private/

@@ -1,0 +1,405 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://or13.github.io/laocoon/schemas/reply-graph.json",
+  "title": "ReplyGraph",
+  "description": "A projection of the event log: the directed reply graph for one or more lists, plus the coverage it was built from and the diagnostics that say how complete it is. This artifact is derived and regenerable. It is never authoritative and is never committed; delete it and re-run the projection.\nEdges come only from In-Reply-To and References. Subject-line threading is deliberately absent: it invents edges the corpus does not contain. Messages with no threading headers are reported as a count, not repaired.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "derived",
+    "generated_at",
+    "generator",
+    "coverage",
+    "nodes",
+    "edges",
+    "threads",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "derived": {
+      "const": true,
+      "description": "Present so no consumer can mistake this file for a source of truth."
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lists",
+        "event_count",
+        "message_event_count",
+        "windows"
+      ],
+      "description": "The crawl coverage this graph rests on, carried into the artifact so that any figure derived from it can state what it did and did not see.",
+      "properties": {
+        "lists": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "event_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "message_event_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "observed_from": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_to": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sent_from": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sent_to": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "windows": {
+          "type": "array",
+          "description": "Every CrawlWindowCompleted the projection replayed.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "list_name",
+              "mode",
+              "started_at",
+              "completed_at",
+              "mailbox_total",
+              "uids_examined",
+              "failure_count"
+            ],
+            "properties": {
+              "list_name": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string"
+              },
+              "started_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "completed_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "mailbox_total": {
+                "type": "integer"
+              },
+              "uids_examined": {
+                "type": "integer"
+              },
+              "failure_count": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_id",
+          "list_name",
+          "uid",
+          "sender_id",
+          "sent_at",
+          "subject",
+          "thread_id",
+          "depth",
+          "in_degree",
+          "out_degree",
+          "body"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "string"
+          },
+          "list_name": {
+            "type": "string"
+          },
+          "uid": {
+            "type": "integer"
+          },
+          "sender_id": {
+            "type": "string"
+          },
+          "sent_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subject": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "string",
+            "description": "message_id of the root of this message's weakly connected component."
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Reply distance from the thread root. 0 for a root."
+          },
+          "in_degree": {
+            "type": "integer",
+            "description": "Number of direct replies this message received."
+          },
+          "out_degree": {
+            "type": "integer",
+            "description": "1 if this message replies to a message present in the corpus, else 0."
+          },
+          "body": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "chars",
+              "quoted_lines",
+              "unquoted_lines"
+            ],
+            "properties": {
+              "chars": {
+                "type": "integer"
+              },
+              "quoted_lines": {
+                "type": "integer"
+              },
+              "unquoted_lines": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "description": "child -> parent. One edge per message that has a resolvable parent.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "child",
+          "parent",
+          "via"
+        ],
+        "properties": {
+          "child": {
+            "type": "string"
+          },
+          "parent": {
+            "type": "string"
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "in_reply_to",
+              "references"
+            ],
+            "description": "Which header the edge was read from. in_reply_to is the direct claim; references is the fallback when In-Reply-To is absent or dangling."
+          }
+        }
+      }
+    },
+    "threads": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "thread_id",
+          "list_name",
+          "subject",
+          "message_count",
+          "distinct_senders",
+          "max_depth",
+          "mean_branching_factor",
+          "started_at",
+          "last_message_at",
+          "reply_pairs"
+        ],
+        "properties": {
+          "thread_id": {
+            "type": "string"
+          },
+          "list_name": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject of the thread root message."
+          },
+          "message_count": {
+            "type": "integer"
+          },
+          "distinct_senders": {
+            "type": "integer",
+            "description": "Count only. Which senders participated is per-person data and stays out of any artifact intended for publication."
+          },
+          "max_depth": {
+            "type": "integer"
+          },
+          "mean_branching_factor": {
+            "type": "number"
+          },
+          "started_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_message_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reply_pairs": {
+            "type": "integer",
+            "description": "Number of resolved child->parent edges inside this thread."
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Everything the graph could not do, stated as counts. A projection that hides its gaps is worse than no projection.",
+      "required": [
+        "messages_total",
+        "messages_superseded_skipped",
+        "messages_without_message_id",
+        "messages_without_threading_headers",
+        "duplicate_message_ids",
+        "dangling_parent_refs",
+        "edges_from_in_reply_to",
+        "edges_from_references",
+        "roots",
+        "thread_count",
+        "isolated_messages"
+      ],
+      "properties": {
+        "messages_total": {
+          "type": "integer"
+        },
+        "messages_superseded_skipped": {
+          "type": "integer"
+        },
+        "messages_without_message_id": {
+          "type": "integer",
+          "description": "Cannot be a node target; still counted as a message."
+        },
+        "messages_without_threading_headers": {
+          "type": "integer",
+          "description": "Neither In-Reply-To nor References. Cannot be attached to a parent."
+        },
+        "duplicate_message_ids": {
+          "type": "integer",
+          "description": "Distinct message_ids seen more than once across the corpus."
+        },
+        "dangling_parent_refs": {
+          "type": "integer",
+          "description": "Messages whose threading headers name a parent that is not in the crawled corpus. Usually a cross-list reply or a message sent before the crawl window."
+        },
+        "edges_from_in_reply_to": {
+          "type": "integer"
+        },
+        "edges_from_references": {
+          "type": "integer"
+        },
+        "roots": {
+          "type": "integer",
+          "description": "Messages with no resolvable parent."
+        },
+        "thread_count": {
+          "type": "integer"
+        },
+        "isolated_messages": {
+          "type": "integer",
+          "description": "Threads of size 1 — a message that neither replied nor was replied to."
+        }
+      }
+    }
+  }
+}

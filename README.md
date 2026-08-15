@@ -32,7 +32,21 @@ published versus kept private. It is the contract this project is built against.
 
 ## Status
 
-Phase 1, pre-prototype. Nothing here is trustworthy yet, and the site is not up.
+Phase 1 built: schema and codegen, the append-only event store, ingestion of the
+`agentproto` corpus, and the reply graph. 106 of the 106 messages in the IMAP
+mailbox are in the log, with no fetch or parse failures. No measures are
+published, no scores exist, and the site is not up.
+
+The phase-1 write-up — what was measured, what was decided, and what was not
+checked — is [`docs/phase-1.md`](docs/phase-1.md).
+
+```
+bun install
+LAOCOON_IMAP_EMAIL=you@example.org bun run ingest --list agentproto
+bun run graph --list agentproto
+bun run stats
+bun run check          # typecheck, Bun tests, pytest
+```
 
 ## Corrections
 

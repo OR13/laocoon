@@ -1,0 +1,268 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://or13.github.io/laocoon/schemas/event.json"
+title: Event
+description: >-
+  An immutable observed fact in the LAOCOON event log. Events are append-only and
+  are never edited; a correction is a new compensating event. Everything else in
+  the system (graphs, measures, the site) is a regenerable projection of this log.
+
+  `event_id` is the SHA-256 of the canonical JSON of `{event_type, payload}` and
+  therefore excludes `observed_at`. Re-observing an unchanged fact produces the
+  same `event_id`, so a re-crawl appends nothing. This is what keeps the log a
+  stream of deltas rather than a daily snapshot.
+
+type: object
+additionalProperties: false
+required: [event_id, event_type, schema_version, observed_at, source, payload]
+properties:
+  event_id:
+    $ref: "#/$defs/ContentHash"
+    description: SHA-256 over canonical JSON of {event_type, payload}. Idempotency key.
+  event_type:
+    type: string
+    enum: [MessageObserved, CrawlWindowCompleted, ObservationSuperseded]
+  schema_version:
+    type: string
+    pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    description: Version of this schema the event was written against.
+  observed_at:
+    type: string
+    format: date-time
+    description: >-
+      When the observation was made, not when the observed thing happened.
+      Deliberately excluded from `event_id`.
+  source:
+    $ref: "#/$defs/SourceRef"
+  payload:
+    oneOf:
+      - $ref: "#/$defs/MessageObserved"
+      - $ref: "#/$defs/CrawlWindowCompleted"
+      - $ref: "#/$defs/ObservationSuperseded"
+
+allOf:
+  - if:
+      properties: { event_type: { const: MessageObserved } }
+      required: [event_type]
+    then:
+      properties: { payload: { $ref: "#/$defs/MessageObserved" } }
+  - if:
+      properties: { event_type: { const: CrawlWindowCompleted } }
+      required: [event_type]
+    then:
+      properties: { payload: { $ref: "#/$defs/CrawlWindowCompleted" } }
+  - if:
+      properties: { event_type: { const: ObservationSuperseded } }
+      required: [event_type]
+    then:
+      properties: { payload: { $ref: "#/$defs/ObservationSuperseded" } }
+
+$defs:
+
+  ContentHash:
+    type: string
+    pattern: "^sha256:[0-9a-f]{64}$"
+    description: Lowercase hex SHA-256, prefixed with its algorithm.
+
+  SenderId:
+    type: string
+    pattern: "^sha256:[0-9a-f]{64}$"
+    description: >-
+      SHA-256 of the lowercased, trimmed RFC 5322 addr-spec of the sender.
+      The plaintext address is never written to the public log; the
+      address-to-id map lives in the gitignored `private/` directory.
+
+      The hash is unsalted on purpose: a participant can hash their own address
+      and confirm exactly which rows describe them, which is required by the
+      contestability commitment in PROBLEM.md section 8. It is not a bulk
+      harvesting surface, which a plaintext column would be.
+
+  SourceRef:
+    type: object
+    additionalProperties: false
+    required: [kind, name]
+    description: Where an observation came from. The crawler sits behind an interface;
+      this records which implementation actually produced the fact.
+    properties:
+      kind:
+        type: string
+        enum: [imap, fixture]
+      name:
+        type: string
+        description: Implementation-specific source identity, e.g. "imap.ietf.org".
+      mailbox:
+        type: string
+        description: Mailbox path the observation was read from, when applicable.
+
+  MessageId:
+    type: string
+    minLength: 1
+    description: >-
+      RFC 5322 msg-id with surrounding angle brackets and whitespace stripped.
+      Case is preserved: msg-id comparison is case-sensitive in the local part.
+
+  MessageObserved:
+    type: object
+    additionalProperties: false
+    description: >-
+      Structural facts about one message as seen in one mailbox. Message bodies
+      are NOT stored here: only a digest and shape counts. The corpus is already
+      published by the IETF; re-publishing it in this repository would add nothing
+      and could not be undone, because the log is immutable.
+    required:
+      - list_name
+      - uid
+      - uid_validity
+      - message_id
+      - in_reply_to
+      - references
+      - subject
+      - sent_at
+      - sent_at_raw
+      - sender_id
+      - body
+    properties:
+      list_name:
+        type: string
+        description: Bare list name, e.g. "agentproto".
+      uid:
+        type: integer
+        minimum: 1
+        description: IMAP UID, unique and stable only within a given uid_validity.
+      uid_validity:
+        type: integer
+        minimum: 0
+        description: IMAP UIDVALIDITY of the mailbox at observation time.
+      message_id:
+        oneOf:
+          - $ref: "#/$defs/MessageId"
+          - type: "null"
+        description: Null when the message carried no parseable Message-ID header.
+      in_reply_to:
+        type: array
+        items: { $ref: "#/$defs/MessageId" }
+        description: All msg-ids parsed from In-Reply-To, in header order.
+      references:
+        type: array
+        items: { $ref: "#/$defs/MessageId" }
+        description: All msg-ids parsed from References, in header order (root first).
+      subject:
+        type: string
+      sent_at:
+        oneOf:
+          - type: string
+            format: date-time
+          - type: "null"
+        description: Date header parsed to ISO 8601 UTC; null when unparseable.
+      sent_at_raw:
+        type: string
+        description: The Date header verbatim, so an unparseable date is auditable.
+      sender_id:
+        $ref: "#/$defs/SenderId"
+      body:
+        $ref: "#/$defs/BodyShape"
+
+  BodyShape:
+    type: object
+    additionalProperties: false
+    description: >-
+      Mechanical shape of the plain-text body. Every field here is countable
+      without judging the text. Whether a reply is substantive is a separate,
+      model-derived record introduced in phase 3, never a field on this event.
+    required: [sha256, chars, lines, quoted_lines, unquoted_lines]
+    properties:
+      sha256:
+        $ref: "#/$defs/ContentHash"
+      chars:
+        type: integer
+        minimum: 0
+      lines:
+        type: integer
+        minimum: 0
+      quoted_lines:
+        type: integer
+        minimum: 0
+        description: Lines matching the RFC 3676 quote prefix ">".
+      unquoted_lines:
+        type: integer
+        minimum: 0
+        description: >-
+          lines - quoted_lines - signature/attribution lines removed. New text
+          written by this sender, counted rather than judged.
+
+  CrawlWindowCompleted:
+    type: object
+    additionalProperties: false
+    description: >-
+      What one crawl actually covered. Emitted on every run, successful or not,
+      so a gap in coverage is a visible fact instead of a silent absence. Every
+      published figure must be able to cite the windows it rests on.
+    required:
+      - list_name
+      - mode
+      - started_at
+      - completed_at
+      - uid_validity
+      - mailbox_total
+      - watermark_before
+      - watermark_after
+      - uids_examined
+      - messages_new
+      - messages_unchanged
+      - messages_superseded
+      - failures
+    properties:
+      list_name: { type: string }
+      mode:
+        type: string
+        enum: [incremental, full]
+        description: >-
+          incremental walks UIDs above the watermark; full re-examines the whole
+          mailbox and can emit ObservationSuperseded.
+      started_at: { type: string, format: date-time }
+      completed_at: { type: string, format: date-time }
+      uid_validity: { type: integer, minimum: 0 }
+      mailbox_total:
+        type: integer
+        minimum: 0
+        description: Messages the server reported present in the mailbox.
+      watermark_before:
+        oneOf: [{ type: integer }, { type: "null" }]
+        description: Highest UID already ingested before this run; null on first run.
+      watermark_after:
+        oneOf: [{ type: integer }, { type: "null" }]
+      uid_min_seen:
+        oneOf: [{ type: integer }, { type: "null" }]
+      uid_max_seen:
+        oneOf: [{ type: integer }, { type: "null" }]
+      uids_examined: { type: integer, minimum: 0 }
+      messages_new: { type: integer, minimum: 0 }
+      messages_unchanged: { type: integer, minimum: 0 }
+      messages_superseded: { type: integer, minimum: 0 }
+      failures:
+        type: array
+        description: UIDs the crawl could not turn into an observation, and why.
+        items:
+          type: object
+          additionalProperties: false
+          required: [uid, reason]
+          properties:
+            uid: { type: integer }
+            reason: { type: string }
+
+  ObservationSuperseded:
+    type: object
+    additionalProperties: false
+    description: >-
+      A previously recorded observation no longer matches the source. The earlier
+      event stays in the log untouched; this event is the correction. Projections
+      must ignore any MessageObserved that a later event supersedes.
+    required: [list_name, uid, uid_validity, superseded_event_id, superseding_event_id, reason]
+    properties:
+      list_name: { type: string }
+      uid: { type: integer }
+      uid_validity: { type: integer }
+      superseded_event_id: { $ref: "#/$defs/ContentHash" }
+      superseding_event_id: { $ref: "#/$defs/ContentHash" }
+      reason:
+        type: string
+        enum: [content_changed, uid_validity_changed]
