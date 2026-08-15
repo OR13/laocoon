@@ -144,9 +144,13 @@
   .tnum { font-variant-numeric: tabular-nums; }
 }
 
-/* The page makes room for the review panel instead of sitting under it. */
+/* The page makes room for the review panel instead of sitting under it. The
+   padding holds at every width the panel is docked at — dropping it at a
+   breakpoint while the panel stayed 19rem wide is what put the panel on top of
+   the thing under review. Below 48rem the panel becomes a full-width sheet,
+   where covering the page is the intended behaviour. */
 body.review-open { padding-right: 19rem; }
-@media (max-width: 80rem) { body.review-open { padding-right: 0; } }
+@media (max-width: 48rem) { body.review-open { padding-right: 0; } }
 
 /* Design-review highlight. A ring rather than a fill, so the highlighted
    section keeps its own palette and the marker reads in both themes. */

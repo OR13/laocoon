@@ -9,9 +9,9 @@
     "ingest": "bun run src/cli/ingest.ts",
     "graph": "bun run src/cli/graph.ts",
     "stats": "bun run src/cli/stats.ts",
-    "test": "bun test",
+    "test": "bun test tests",
     "test:py": "uv run --directory python --with pytest pytest tests -q",
-    "check": "tsc --noEmit && bun --cwd web run typecheck && bun test && uv run --directory python --with pytest pytest tests -q",
+    "check": "tsc --noEmit && bun --cwd web run typecheck && bun test tests && uv run --directory python --with pytest pytest tests -q",
     "typecheck": "tsc --noEmit",
     "resolve": "bun run src/cli/resolve.ts",
     "reputation": "bun run src/cli/reputation.ts",
@@ -28,7 +28,8 @@
     "stewards": "bun run src/cli/stewards.ts",
     "embed": "bun run src/cli/embed.ts",
     "topics": "bun run src/cli/topics.ts",
-    "name-topics": "bun run src/cli/name-topics.ts"
+    "name-topics": "bun run src/cli/name-topics.ts",
+    "test:e2e": "playwright test --config web/playwright.config.ts"
   },
   "dependencies": {
     "ajv": "^8.17.1",
@@ -37,6 +38,7 @@
     "yaml": "^2.8.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/bun": "^1.2.0",
     "@types/mailparser": "^3.4.6",
     "json-schema-to-typescript": "^15.0.4",

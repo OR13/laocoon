@@ -88,7 +88,7 @@ export function ReviewPanel({ spec }: { spec: ReviewSpec }) {
 
   return (
     <aside
-      className="bg-card fixed top-0 right-0 z-50 flex h-full w-[19rem] flex-col border-l shadow-2xl"
+      className="bg-card fixed top-0 right-0 z-50 flex h-full w-full flex-col border-l shadow-2xl md:w-[19rem]"
       aria-label="Design review"
     >
       <header className="flex items-start justify-between gap-2 border-b p-4">

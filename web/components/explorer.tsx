@@ -109,13 +109,17 @@ export function Explorer({
   return (
     <div className="space-y-2">
       <div className="bg-card flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
-        <Button
-          size="sm"
-          variant={showPeople ? "default" : "outline"}
-          onClick={() => setShowPeople((v) => !v)}
-        >
-          {showPeople ? "Hide people" : "Show people"}
-        </Button>
+        {/* People are a private join: the public page ships no participation
+            rows, so the control would be a button that can never do anything. */}
+        {named && (
+          <Button
+            size="sm"
+            variant={showPeople ? "default" : "outline"}
+            onClick={() => setShowPeople((v) => !v)}
+          >
+            {showPeople ? "Hide people" : "Show people"}
+          </Button>
+        )}
         <Button
           size="sm"
           variant="outline"
@@ -169,12 +173,15 @@ export function Explorer({
 
       <div className="grid gap-3 lg:grid-cols-[1fr_19rem]">
         <SigmaGraph view={view} onSelect={onSelect} selectedKey={selected?.key ?? null} />
-        <aside className="bg-card max-h-[560px] overflow-auto rounded-lg border p-3 text-sm">
+        <aside
+          data-testid="detail-panel"
+          className="bg-card max-h-[560px] overflow-auto rounded-lg border p-3 text-sm"
+        >
           {!selected && (
             <p className="text-muted-foreground text-xs">
-              Circles are topics and people, squares are threads. Click a topic to expand it
-              into its threads; click again to collapse. Size is messages, fill is novelty for
-              topics and threads, reputation for people.
+              Circles are topics{named ? " and people" : ""}, squares are threads. Click a topic
+              to expand it into its threads; click again to collapse. Size is messages, fill is
+              novelty{named ? " for topics and threads, reputation for people" : ""}.
             </p>
           )}
           {selected?.tier === "topic" && (() => {
@@ -264,11 +271,23 @@ export function Explorer({
       </div>
 
       <div className={cn("text-muted-foreground flex flex-wrap items-center gap-4 text-xs")}>
+        {/* Hue is the list, and the legend has to say so: a single "topic"
+            swatch in the sequential blue was simply the wrong colour, because
+            every topic on screen is drawn in its own list's ramp. */}
         <span className="flex items-center gap-1.5">
-          <i className="inline-block size-3 rounded-full bg-[var(--seq-550)]" /> topic
+          <i className="inline-block size-3 rounded-full bg-[var(--l1-500)]" /> agentproto
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="inline-block size-3 rounded-[2px] bg-[var(--thread-line)]" /> thread
+          <i className="inline-block size-3 rounded-full bg-[var(--l2-500)]" /> agent2agent
+        </span>
+        <span className="flex items-center gap-1.5">
+          <i className="inline-block size-3 rounded-full bg-[var(--l2-500)]" />
+          <i className="inline-block size-3 rounded-[2px] bg-[var(--l2-500)]" />
+          topic / thread
+        </span>
+        <span className="flex items-center gap-1.5">
+          <i className="inline-block size-3 rounded-[2px] bg-[var(--thread-line)]" /> novelty not
+          measured
         </span>
         {named && (
           <span className="flex items-center gap-1.5">
@@ -276,8 +295,8 @@ export function Explorer({
           </span>
         )}
         <span className="flex items-center gap-1.5">
-          fill
-          <i className="inline-block h-2 w-14 rounded-sm border bg-[linear-gradient(90deg,var(--seq-100),var(--seq-400),var(--seq-700))]" />
+          novelty
+          <i className="inline-block h-2 w-14 rounded-sm border bg-[linear-gradient(90deg,var(--l2-100),var(--l2-300),var(--l2-700))]" />
           low → high
         </span>
         <span>size ∝ messages</span>
