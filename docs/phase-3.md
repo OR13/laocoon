@@ -210,3 +210,59 @@ global threshold. What it suggests instead is hierarchical topics — a topic th
 contains sub-topics, which is what the corpus actually looks like — or a
 density-based method that is allowed to leave threads unassigned. Neither is
 built.
+
+---
+
+## Addendum — the central result did not survive the control corpus
+
+Every forecaster is now scored per list. It should have been from the start: with
+one `list_name` missing from `ForecastEvaluated`, two lists pooled into one
+median, and a finding from 15 origins on a three-week-old list silently became a
+claim about the method.
+
+**agent2agent, 7-day horizon, 159 origins** — the corpus with enough history to
+mean anything:
+
+| forecaster | defined | median ρ | beats baseline |
+| --- | ---: | ---: | ---: |
+| `recent_replies` *(baseline)* | 74/159 | **+0.462** | — |
+| `recent_novel_replies` | 69/159 | +0.419 | 31/159 |
+| `recent_seeded_participants` | 75/159 | +0.403 | 27/159 |
+
+**Nothing beats counting replies.** Novelty and community-conferred participation
+both land slightly below the baseline and beat it at under a fifth of origins.
+
+This reverses two things reported earlier from `agentproto` alone:
+
+- *"At a week out, raw volume anti-predicts (−0.260)."* True on 15 origins of a
+  three-week-old list. On 159 origins of a 483-day list, volume predicts at
+  **+0.462**. The negative was a property of a young list where every thread
+  burns out, not of mailing lists.
+- *"Participation by accounts with community-conferred standing is the only
+  forecaster that survives."* It scored +0.522 against a negative baseline on
+  agentproto. On agent2agent it is +0.403 against +0.462 — it loses.
+
+The project's stated insight — that reception from centrally-connected accounts
+beats message count — is **not supported on the larger corpus**. It is not
+refuted either: 27 of 159 origins do favour it, and the corpus is still two
+lists. But it cannot be reported as surviving contact with data, because on the
+better data it does not.
+
+## Addendum — the health verdict was removed
+
+An open/narrow/closed label built from reach, uptake and novelty was tested
+against the same standard and **inverted**:
+
+| state | agentproto revival | agent2agent revival |
+| --- | ---: | ---: |
+| open | 0.077 | 0.021 |
+| narrow | 0.370 | 0.046 |
+| closed | **0.800** | **0.286** |
+
+Threads it called closed were the most likely to continue. `reach` — distinct
+senders per message — is an inverse proxy for a sustained argument: high reach is
+usually a broadcast that drew a few one-off replies and died. The label encoded
+"breadth is health" and two lists disagreed.
+
+The three axes remain, as measurements. The verdict is gone, and nothing should
+reintroduce one without passing the same test.

@@ -329,6 +329,9 @@ $defs:
       - unclassified_replies
       - substantive_reply_ratio
       - quoting_reply_ratio
+      - median_novelty
+      - reach
+      - uptake_from_standing
       - seeded_participants
       - new_participants
       - new_participant_share
@@ -387,6 +390,26 @@ $defs:
       quoting_reply_ratio:
         oneOf: [{ type: number }, { type: "null" }]
         description: Share of replies quoting at least one line. Mechanical, no model.
+      median_novelty:
+        oneOf: [{ type: number }, { type: "null" }]
+        description: >-
+          Median fraction of a reply's sentences that said something earlier
+          messages in the thread had not. Replaces the substantive/hollow ratio,
+          which had no variance across two model sizes. The absolute value is an
+          artifact of the sentence-duplicate cutoff, so it is comparable across
+          threads under one run and not interpretable as a percentage.
+      reach:
+        oneOf: [{ type: number }, { type: "null" }]
+        description: >-
+          Distinct senders per message. Published as a measurement, not as a
+          quality: it is an inverse proxy for a sustained conversation, and a
+          three-state health label built on it inverted against engagement on
+          both lists and was removed.
+      uptake_from_standing:
+        oneOf: [{ type: number }, { type: "null" }]
+        description: >-
+          Share of this thread's replies from an account holding
+          community-conferred standing. A ratio of counts; no account is named.
       seeded_participants:
         type: integer
         description: >-
@@ -431,6 +454,7 @@ $defs:
       if reputation-weighted engagement does not beat recent reply count, that is
       the finding, and it must be visible rather than absent.
     required:
+      - list_name
       - origin_at
       - horizon_days
       - forecaster
@@ -443,6 +467,12 @@ $defs:
       - actual_metric
       - generator
     properties:
+      list_name:
+        type: string
+        description: >-
+          Which list this evaluation is about. Without it two lists' results pool
+          into one median and a finding from a small list silently becomes a
+          claim about the method.
       origin_at:
         type: string
         format: date-time

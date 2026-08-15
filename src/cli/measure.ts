@@ -50,6 +50,7 @@ const proc = Bun.spawn(
     "--model", values.model!,
     "--prompt-hash", PROMPT_HASH,
     "--prompt-version", PROMPT_VERSION,
+    "--health", join(ARTIFACTS_DIR, `health-${values.list}.json`),
     "--list", values.list!,
   ],
   { stdout: "inherit", stderr: "inherit" },

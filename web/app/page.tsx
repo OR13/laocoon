@@ -55,7 +55,6 @@ export default async function OverviewPage() {
           distinct_senders: th.distinct_senders,
           last_message_at: th.last_message_at,
           median_novelty: th.median_novelty,
-          health: healthOf.get(th.id)?.state,
           reach: healthOf.get(th.id)?.reach,
           uptakeFromStanding: healthOf.get(th.id)?.uptake_from_standing,
         })),
@@ -145,47 +144,51 @@ export default async function OverviewPage() {
       {listHealth && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle className="text-base">Discussion health — {listHealth.list_name}</CardTitle>
+            <CardTitle className="text-base">
+              Thread measures — {listHealth.list_name}
+            </CardTitle>
             <CardDescription>
-              Every thread of {listHealth.thresholds.min_messages}+ messages, placed by three
-              measures taken independently: <strong>reach</strong> (distinct people per
-              message), <strong>uptake</strong> (share of replies from an account with
-              community-conferred standing) and <strong>novelty</strong> (how much of each
-              reply was new to the thread). The state comes from those three together, never
-              from an average of them — and it describes a discussion, never a person.
+              Three axes over {listHealth.threads_scored} threads of{" "}
+              {listHealth.thresholds.min_messages}+ messages, each measured
+              independently and reported as a distribution rather than combined.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 sm:grid-cols-3">
               {(
                 [
-                  ["open", "Open", "reach and novelty both high — going somewhere", "var(--good)"],
-                  ["narrow", "Narrow", "neither clearly one nor the other", "var(--muted-foreground)"],
-                  ["closed", "Closed", "few people, no outside uptake, repeating", "var(--warn)"],
+                  ["reach", "Reach", "distinct people per message"],
+                  ["uptake_from_standing", "Uptake", "share of replies from an account with standing"],
+                  ["median_novelty", "Novelty", "share of a reply that was new to the thread"],
                 ] as const
-              ).map(([key, label, note, colour]) => (
-                <div key={key} className="rounded-lg border p-3">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="inline-block size-2.5 rounded-full"
-                      style={{ background: colour }}
-                    />
-                    <span className="text-xs font-semibold">{label}</span>
+              ).map(([key, label, note]) => {
+                const a = listHealth.axes[key];
+                return (
+                  <div key={key} className="rounded-lg border p-3">
+                    <div className="text-xs font-semibold">{label}</div>
+                    <div className="tnum mt-1 text-2xl font-semibold">
+                      {a?.median?.toFixed(2) ?? "—"}
+                    </div>
+                    <div className="text-muted-foreground tnum text-xs">
+                      p10 {a?.p10?.toFixed(2) ?? "—"} · p90 {a?.p90?.toFixed(2) ?? "—"}
+                    </div>
+                    <p className="text-muted-foreground mt-1 text-xs">{note}</p>
                   </div>
-                  <div className="tnum mt-1 text-2xl font-semibold">
-                    {listHealth.counts[key] ?? 0}
-                  </div>
-                  <p className="text-muted-foreground mt-0.5 text-xs">{note}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
-            <p className="text-muted-foreground mt-3 text-xs">
-              {listHealth.threads_scored} threads scored. A &ldquo;closed&rdquo; state is a
-              reason to go and read the thread. It says nothing about how anything in it was
-              written, and it cannot: every input is graph position or overlap with earlier
-              text, so a group of people talking only to each other and repeating themselves
-              scores the same whoever they are.
-            </p>
+            <div className="mt-3 rounded-md border border-l-[3px] border-l-[var(--warn)] bg-[var(--warn-bg)] p-3 text-xs">
+              <strong className="text-[var(--warn)]">
+                A health verdict was here and has been removed.
+              </strong>{" "}
+              An open/narrow/closed label built from these three axes was tested the way
+              everything else here is tested — does it predict engagement over the next
+              horizon — and it inverted. Threads it called &ldquo;closed&rdquo; were the
+              most likely to continue: 80% against 7.7% for &ldquo;open&rdquo; on
+              agentproto, 28.6% against 2.1% on agent2agent. Reach turns out to be an
+              inverse proxy for a sustained argument. The axes are kept because they are
+              measurements; the verdict on top of them was wrong.
+            </div>
           </CardContent>
         </Card>
       )}

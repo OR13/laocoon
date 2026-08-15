@@ -19,7 +19,7 @@ import { join } from "node:path";
 import type { Event, ForecastEvaluated, SourceRef } from "../schema/generated.ts";
 import { JsonlEventStore } from "../store/jsonl-store.ts";
 import { makeEvent } from "../events/factory.ts";
-import { ARTIFACTS_DIR, EVENTS_DIR, PRIVATE_DIR, repoPath } from "../lib/paths.ts";
+import { ARTIFACTS_DIR, CACHE_DIR, EVENTS_DIR, PRIVATE_DIR, repoPath } from "../lib/paths.ts";
 
 const { values } = parseArgs({
   options: {
@@ -44,6 +44,7 @@ const args = [
   "--out", out,
   "--horizon-days", values["horizon-days"]!,
   "--model", values.model!,
+  "--novelty", join(CACHE_DIR, "embeddings", "nomic-embed-text__sentence-v1"),
   "--list", values.list!,
 ];
 if (values["origin-step-days"]) args.push("--origin-step-days", values["origin-step-days"]);

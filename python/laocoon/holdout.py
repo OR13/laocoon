@@ -42,7 +42,12 @@ FORECASTERS = {
     "recent_replies": True,
     "recent_substantive_replies": False,
     "recent_seeded_participants": False,
+    "recent_novel_replies": False,
 }
+
+#: A reply is "novel" when most of its sentences said something the thread had
+#: not. The cutoff is the same one the health axes use, so the two agree.
+NOVEL_AT = 0.60
 
 
 def predictors(
@@ -51,6 +56,7 @@ def predictors(
     seed_ids: set[str],
     origin: datetime,
     window_days: int,
+    novelty: dict[str, float] | None = None,
 ) -> tuple[dict[str, dict[str, float]], dict[str, str]]:
     """Score every thread visible at the origin, using only data up to it.
 
@@ -77,10 +83,16 @@ def predictors(
             if verdicts.get((n["message_id"], body_of.get(n["message_id"], ""))) == "substantive"
         )
         seeded = len({n["sender_id"] for n in in_window} & seed_ids)
+        novel = sum(
+            1
+            for n in replies_in_window
+            if (novelty or {}).get(n["message_id"], 0.0) >= NOVEL_AT
+        )
 
         scores["recent_replies"][thread_id] = float(len(replies_in_window))
         scores["recent_substantive_replies"][thread_id] = float(substantive)
         scores["recent_seeded_participants"][thread_id] = float(seeded)
+        scores["recent_novel_replies"][thread_id] = float(novel)
 
     return scores, {n["message_id"]: n["thread_id"] for n in graph["nodes"]}
 
@@ -127,10 +139,12 @@ def evaluate(
     seed_ids: set[str],
     origin: datetime,
     horizon_days: int,
+    novelty: dict[str, float] | None = None,
+    list_name: str = "",
 ) -> list[dict[str, Any]]:
     """One ForecastEvaluated payload per forecaster at this origin."""
     horizon = origin + timedelta(days=horizon_days)
-    scores, _ = predictors(messages, verdicts, seed_ids, origin, horizon_days)
+    scores, _ = predictors(messages, verdicts, seed_ids, origin, horizon_days, novelty)
     thread_ids = sorted(scores["recent_replies"])
     actual = actual_engagement(messages, origin, horizon, thread_ids)
 
@@ -158,6 +172,7 @@ def evaluate(
 
         payloads.append(
             {
+                "list_name": list_name,
                 "origin_at": origin_iso,
                 "horizon_days": horizon_days,
                 "forecaster": name,
@@ -197,6 +212,8 @@ def main() -> int:
         "before the last message, so every origin has a full horizon of real data.",
     )
     parser.add_argument("--model", default="gemma4:12b")
+    parser.add_argument("--novelty", type=Path, default=None,
+                        help="health artifact, for per-message novelty")
     parser.add_argument("--list", dest="list_name", default="agentproto")
     args = parser.parse_args()
 
@@ -225,9 +242,25 @@ def main() -> int:
             cursor -= step
         origins.reverse()
 
+    # Per-message novelty, recomputed here from the same cache the health axes
+    # use so the two cannot disagree about what "novel" means.
+    novelty: dict[str, float] = {}
+    if args.novelty and args.novelty.exists():
+        from .topics import load_sentence_vectors, novelty_scores
+
+        body_of = {m["message_id"]: m["body"]["sha256"] for m in state.messages if m["message_id"]}
+        cache = args.novelty
+        sv = load_sentence_vectors(cache, set(body_of.values()))
+        novelty = novelty_scores(build(state.messages), body_of, sv)
+
     evaluations: list[dict[str, Any]] = []
     for origin in origins:
-        evaluations.extend(evaluate(state.messages, verdicts, seed_ids, origin, args.horizon_days))
+        evaluations.extend(
+            evaluate(
+                state.messages, verdicts, seed_ids, origin, args.horizon_days, novelty,
+                args.list_name,
+            )
+        )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(evaluations, indent=2) + "\n", encoding="utf-8")

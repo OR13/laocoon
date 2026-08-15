@@ -78,11 +78,20 @@ def messages_up_to(messages: Iterable[dict[str, Any]], as_of: datetime) -> list[
     return kept
 
 
+def load_health(path: Path | None) -> dict[str, dict[str, Any]]:
+    """Per-thread health, if it has been computed. Aggregate, no account ids."""
+    if not path or not path.exists():
+        return {}
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    return {r["thread_id"]: r for r in doc.get("threads", [])}
+
+
 def thread_measures(
     messages: list[dict[str, Any]],
     verdicts: dict[tuple[str, str], str],
     seed_ids: set[str],
     *,
+    health: dict[str, dict[str, Any]] | None = None,
     as_of: datetime,
     window_days: int,
     new_participant_window_days: int,
@@ -159,6 +168,13 @@ def thread_measures(
                 # and a thread of hollow replies are different facts.
                 "substantive_reply_ratio": (substantive / judged) if judged else None,
                 "quoting_reply_ratio": (quoting / len(replies)) if replies else None,
+                "median_novelty": (health or {}).get(thread["thread_id"], {}).get(
+                    "median_novelty"
+                ),
+                "reach": (health or {}).get(thread["thread_id"], {}).get("reach"),
+                "uptake_from_standing": (health or {})
+                .get(thread["thread_id"], {})
+                .get("uptake_from_standing"),
                 "seeded_participants": len(senders & seed_ids),
                 "new_participants": sum(
                     1 for s in senders if first_seen.get(s, as_of) > new_cutoff
@@ -188,6 +204,7 @@ def main() -> int:
     parser.add_argument("--window-days", type=int, default=7)
     parser.add_argument("--new-participant-window-days", type=int, default=14)
     parser.add_argument("--model", default="gemma4:12b", help="reference classifier")
+    parser.add_argument("--health", type=Path, default=None)
     parser.add_argument("--prompt-hash", required=True)
     parser.add_argument("--prompt-version", required=True)
     parser.add_argument("--list", dest="list_name", default="agentproto")
@@ -212,6 +229,7 @@ def main() -> int:
         state.messages,
         verdicts,
         seed_ids,
+        health=load_health(args.health),
         as_of=as_of,
         window_days=args.window_days,
         new_participant_window_days=args.new_participant_window_days,

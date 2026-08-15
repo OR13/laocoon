@@ -32,6 +32,9 @@ function measure(overrides: Partial<ThreadMeasured> = {}): ThreadMeasured {
     unclassified_replies: 0,
     substantive_reply_ratio: 0.5,
     quoting_reply_ratio: 1,
+    median_novelty: 0.7,
+    reach: 0.5,
+    uptake_from_standing: 0.3,
     seeded_participants: 1,
     new_participants: 1,
     new_participant_share: 0.5,
@@ -140,6 +143,7 @@ describe("selectPublishable", () => {
 
   test("keeps every forecast evaluation — accuracy history is the point", () => {
     const forecast = (origin: string): ForecastEvaluated => ({
+      list_name: "testlist",
       origin_at: origin,
       horizon_days: 7,
       forecaster: "recent_replies",

@@ -218,37 +218,16 @@ export function Explorer({
                     Open in the IETF mail archive ↗
                   </a>
                 )}
-                {t.health && t.health !== "unmeasured" && (
-                  <div className="mt-2 rounded-md border p-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="inline-block size-2.5 rounded-full"
-                        style={{
-                          background:
-                            t.health === "open"
-                              ? "var(--good)"
-                              : t.health === "closed"
-                                ? "var(--warn)"
-                                : "var(--muted-foreground)",
-                        }}
-                      />
-                      <span className="text-xs font-semibold capitalize">{t.health}</span>
-                    </div>
-                    <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
-                      <Row label="Reach">{t.reach?.toFixed(2) ?? "—"}</Row>
-                      <Row label="Uptake from standing">
-                        {t.uptakeFromStanding?.toFixed(2) ?? "—"}
-                      </Row>
-                      <Row label="Novelty">
-                        {t.median_novelty === null ? "—" : t.median_novelty.toFixed(2)}
-                      </Row>
-                    </dl>
-                    <p className="text-muted-foreground mt-1.5 text-[10px] leading-snug">
-                      A state of the discussion, from these three together — never a
-                      score, and never about who wrote anything. &ldquo;Closed&rdquo; is a
-                      reason to read the thread.
-                    </p>
-                  </div>
+                {(t.reach !== undefined || t.median_novelty !== null) && (
+                  <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 rounded-md border p-2 text-[11px]">
+                    <Row label="Reach">{t.reach?.toFixed(2) ?? "—"}</Row>
+                    <Row label="Uptake from standing">
+                      {t.uptakeFromStanding?.toFixed(2) ?? "—"}
+                    </Row>
+                    <Row label="Novelty">
+                      {t.median_novelty === null ? "—" : t.median_novelty.toFixed(2)}
+                    </Row>
+                  </dl>
                 )}
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
                   <Row label="Messages">{t.message_count}</Row>
@@ -289,13 +268,7 @@ export function Explorer({
           <i className="inline-block size-3 rounded-full bg-[var(--seq-550)]" /> topic
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="inline-block size-3 rounded-[2px] bg-[var(--good)]" /> open thread
-        </span>
-        <span className="flex items-center gap-1.5">
-          <i className="inline-block size-3 rounded-[2px] bg-[var(--thread-line)]" /> narrow
-        </span>
-        <span className="flex items-center gap-1.5">
-          <i className="inline-block size-3 rounded-[2px] bg-[var(--warn)]" /> closed
+          <i className="inline-block size-3 rounded-[2px] bg-[var(--thread-line)]" /> thread
         </span>
         {named && (
           <span className="flex items-center gap-1.5">

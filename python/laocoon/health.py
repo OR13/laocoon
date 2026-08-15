@@ -1,4 +1,4 @@
-"""Thread health: three axes, a state from their conjunction, no score.
+"""Thread axes: reach, uptake and novelty. No state, and no health verdict.
 
     uv run --directory python python -m laocoon.health \
         --events ../events --seed ../private/artifacts/seed.json \
@@ -21,19 +21,27 @@ Three axes, each measured independently:
   novelty   the median fraction of a reply's sentences that said something the
             thread had not already said.
 
-State comes from a **conjunction**, not a weighted sum — §7 rules a composite
-out, because a single number invites an argument about weights nobody can win.
-All three values travel with the state everywhere it is displayed, so a reader
-can disagree with one column instead of the whole verdict.
+**There was an open/narrow/closed state here and it has been removed, because it
+was wrong.** It was tested the way everything else here is tested — does the
+label at time *T* predict engagement in *(T, T+h]* — and it did not merely fail
+to separate, it inverted:
 
-  open        high on reach and novelty — a discussion that is going somewhere
-  narrow      neither clearly one nor the other
-  closed      low on all three — few people, no outside engagement, repeating
+    P(any reply in horizon | state)     agentproto      agent2agent
+      open                                   0.077            0.021
+      narrow                                 0.370            0.046
+      closed                                 0.800            0.286
 
-**None of this concerns provenance.** A closed, repetitive thread between humans
-scores exactly as a closed, repetitive thread scores. A `closed` state is a
-reason to go and read the thread, and it is not evidence about how anything in
-it was written.
+Threads the label called "closed" were by far the *most* likely to continue. The
+cause is `reach`: distinct senders per message is an inverse proxy for a
+sustained conversation. High reach is usually a broadcast that drew a few one-off
+replies and died; low reach is an argument still in progress. The label encoded
+"breadth is health", and on two lists the data says otherwise.
+
+The three axes are kept because they are measurements. The verdict built on top
+of them is gone, and nothing should reintroduce one without passing the same
+test first.
+
+**None of this concerns provenance,** and no arrangement of these axes could.
 """
 
 from __future__ import annotations
@@ -53,26 +61,8 @@ from .topics import load_sentence_vectors, novelty_scores
 
 GENERATOR = "laocoon.health/0.1.0"
 
-#: Axis thresholds. Constants, stated here so moving one and re-running is a
-#: one-line experiment rather than an argument.
-LOW_REACH = 0.35
-HIGH_REACH = 0.55
-LOW_NOVELTY = 0.60
-HIGH_NOVELTY = 0.75
-LOW_UPTAKE = 0.05
-#: Below this a thread is too short for any of the three to mean anything.
+#: Below this a thread is too short for any of the three axes to mean anything.
 MIN_MESSAGES = 3
-
-
-def classify(reach: float, uptake: float, novelty: float | None) -> str:
-    """A state from a conjunction. Never an average of the three."""
-    if novelty is None:
-        return "unmeasured"
-    if reach <= LOW_REACH and uptake <= LOW_UPTAKE and novelty <= LOW_NOVELTY:
-        return "closed"
-    if reach >= HIGH_REACH and novelty >= HIGH_NOVELTY:
-        return "open"
-    return "narrow"
 
 
 def main() -> int:
@@ -127,14 +117,20 @@ def main() -> int:
                 "reach": round(reach, 4),
                 "uptake_from_standing": round(uptake, 4),
                 "median_novelty": round(median_novelty, 4) if median_novelty is not None else None,
-                "state": classify(reach, uptake, median_novelty),
             }
         )
 
     rows.sort(key=lambda r: (-r["messages"], r["thread_id"]))
-    counts: dict[str, int] = defaultdict(int)
-    for r in rows:
-        counts[r["state"]] += 1
+
+    def spread(key: str) -> dict[str, float | None]:
+        vals = [r[key] for r in rows if r[key] is not None]
+        if not vals:
+            return {"p10": None, "median": None, "p90": None}
+        return {
+            "p10": round(float(np.percentile(vals, 10)), 4),
+            "median": round(float(np.median(vals)), 4),
+            "p90": round(float(np.percentile(vals, 90)), 4),
+        }
 
     artifact = {
         "schema_version": "1.0.0",
@@ -145,22 +141,24 @@ def main() -> int:
         .replace("+00:00", "Z"),
         "generator": GENERATOR,
         "list_name": args.list_name,
-        "thresholds": {
-            "low_reach": LOW_REACH,
-            "high_reach": HIGH_REACH,
-            "low_novelty": LOW_NOVELTY,
-            "high_novelty": HIGH_NOVELTY,
-            "low_uptake": LOW_UPTAKE,
-            "min_messages": MIN_MESSAGES,
+        "thresholds": {"min_messages": MIN_MESSAGES},
+        "axes": {
+            "reach": spread("reach"),
+            "uptake_from_standing": spread("uptake_from_standing"),
+            "median_novelty": spread("median_novelty"),
         },
-        "counts": dict(counts),
+        "state_removed": (
+            "An open/narrow/closed label was removed after it failed its holdout "
+            "test and inverted: threads it called closed were the most likely to "
+            "continue. See the module docstring."
+        ),
         "threads_scored": len(rows),
         "threads": rows,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"out": str(args.out), "list": args.list_name,
-                      "threads_scored": len(rows), "counts": dict(counts)}, indent=2))
+                      "threads_scored": len(rows), "axes": artifact["axes"]}, indent=2))
     return 0
 
 

@@ -43,8 +43,6 @@ export interface GraphNode {
   cluster: string;
   gist?: string;
   href?: string;
-  /** Thread health state. A property of the exchange, never of a person. */
-  health?: "open" | "narrow" | "closed" | "unmeasured";
   reach?: number;
   uptakeFromStanding?: number;
   ref: string;
@@ -88,7 +86,6 @@ export interface GraphSource {
     distinct_senders: number;
     last_message_at: string | null;
     median_novelty: number | null;
-    health?: "open" | "narrow" | "closed" | "unmeasured";
     reach?: number;
     uptakeFromStanding?: number;
   }[];
@@ -196,7 +193,6 @@ export function buildView(
       cluster: thread.topic_id ?? "unassigned",
       gist: thread.gist,
       href: thread.href,
-      health: thread.health,
       reach: thread.reach,
       uptakeFromStanding: thread.uptakeFromStanding,
       ref: thread.id,

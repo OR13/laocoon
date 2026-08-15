@@ -37,6 +37,9 @@ export interface ThreadMeasure {
   unclassified_replies: number;
   substantive_reply_ratio: number | null;
   quoting_reply_ratio: number | null;
+  median_novelty: number | null;
+  reach: number | null;
+  uptake_from_standing: number | null;
   seeded_participants: number;
   new_participants: number;
   new_participant_share: number | null;
@@ -215,7 +218,8 @@ export interface Health {
   publication: string;
   list_name: string;
   thresholds: Record<string, number>;
-  counts: Record<string, number>;
+  axes: Record<string, { p10: number | null; median: number | null; p90: number | null }>;
+  state_removed: string;
   threads_scored: number;
   threads: {
     thread_id: string;
@@ -227,7 +231,6 @@ export interface Health {
     reach: number;
     uptake_from_standing: number;
     median_novelty: number | null;
-    state: "open" | "narrow" | "closed" | "unmeasured";
   }[];
 }
 

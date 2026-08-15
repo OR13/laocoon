@@ -158,6 +158,9 @@ class ThreadMeasured:
     unclassified_replies: int
     substantive_reply_ratio: float | None
     quoting_reply_ratio: float | None
+    median_novelty: float | None
+    reach: float | None
+    uptake_from_standing: float | None
     seeded_participants: int
     new_participants: int
     new_participant_share: float | None
@@ -173,6 +176,7 @@ class ForecastEvaluated:
     Every run records a baseline alongside the forecaster being tested. A correlation is meaningless without the trivial predictor to compare it to — if reputation-weighted engagement does not beat recent reply count, that is the finding, and it must be visible rather than absent.
     """
 
+    list_name: str
     origin_at: str
     horizon_days: int
     forecaster: str

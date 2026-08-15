@@ -336,6 +336,18 @@ export interface ThreadMeasured {
    */
   quoting_reply_ratio: number | null;
   /**
+   * Median fraction of a reply's sentences that said something earlier messages in the thread had not. Replaces the substantive/hollow ratio, which had no variance across two model sizes. The absolute value is an artifact of the sentence-duplicate cutoff, so it is comparable across threads under one run and not interpretable as a percentage.
+   */
+  median_novelty: number | null;
+  /**
+   * Distinct senders per message. Published as a measurement, not as a quality: it is an inverse proxy for a sustained conversation, and a three-state health label built on it inverted against engagement on both lists and was removed.
+   */
+  reach: number | null;
+  /**
+   * Share of this thread's replies from an account holding community-conferred standing. A ratio of counts; no account is named.
+   */
+  uptake_from_standing: number | null;
+  /**
    * Count of participants holding community-conferred standing under the published seed rule. A count, never a list.
    */
   seeded_participants: number;
@@ -365,6 +377,10 @@ export interface ThreadMeasured {
  * Every run records a baseline alongside the forecaster being tested. A correlation is meaningless without the trivial predictor to compare it to — if reputation-weighted engagement does not beat recent reply count, that is the finding, and it must be visible rather than absent.
  */
 export interface ForecastEvaluated {
+  /**
+   * Which list this evaluation is about. Without it two lists' results pool into one median and a finding from a small list silently becomes a claim about the method.
+   */
+  list_name: string;
   /**
    * T. Only data at or before this was used to produce the ranking.
    */
