@@ -38,6 +38,20 @@ Every seeded account matched `wg_chair_past`, `rfc_author` and
 bimodal, so on this corpus the six-clause rule behaves like a one-clause rule —
 robust, but its discrimination is untested at this size.
 
+> **Corrected 2026-08-16.** That last sentence was an artifact of 11 seeded
+> accounts, and it does not survive the second list. Recomputed at **86 seeded
+> of 204 addresses**, no clause is matched by every member: `wg_chair_past`
+> covers 53 and `rfc_author` 64, against the 84 covered by
+> `adopted_wg_document_author`. Members are spread across how many clauses they
+> match — 17 match exactly one, 15 two, 7 three, 26 four, 9 five, 12 all six —
+> where at n=28 the distribution was two spikes. The rule is not
+> interchangeable with its widest clause either: dropping the other five would
+> lose 2 members, and 16 of the 17 single-clause members are held by
+> `adopted_wg_document_author` alone, so the clauses that look redundant are
+> carrying the accounts the widest one misses. The original numbers are left
+> above unedited, because a corrected document that hides what it used to say
+> is worse than a wrong one.
+
 **Account graph.** 28 accounts, 58 directed edges, density 0.077. 2 self-reply
 edges dropped. All 11 seed members had posted, so propagation restarts on all of
 them.
