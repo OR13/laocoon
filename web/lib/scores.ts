@@ -101,6 +101,8 @@ export interface MailingList {
   messages: number;
   participants: number;
   topics: number;
+  /** Why there are none, when there are none. A zero is a refusal, not a gap. */
+  topics_refused: string | null;
   utility: Record<Level, number>;
   contributor: Record<Level, number>;
   first_message_at: string | null;

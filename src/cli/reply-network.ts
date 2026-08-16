@@ -256,15 +256,44 @@ nodes.sort((a, b) => b.messages - a.messages || a.id.localeCompare(b.id));
  * is a question about subjects.
  */
 const topicOfThread = new Map<string, { id: string; label: string }>();
+/**
+ * Why a list has no topics, when it has none.
+ *
+ * A zero here is a refusal, not an absence of data: the clustering caps any
+ * single cluster at a share of the corpus, and on a list that is one long
+ * conversation every candidate threshold puts most of the threads in one
+ * cluster and is rejected. Shown as a bare 0 that reads as a bug, so the
+ * reason travels with the number.
+ */
+const topicsRefused = new Map<string, string>();
 for (const list of graph.coverage.lists) {
   const path = join(ARTIFACTS_DIR, `topic-tree-${list}.json`);
   if (!(await Bun.file(path).exists())) continue;
   const tree = (await Bun.file(path).json()) as {
     topics: { id: string; label: string | null; subjects: string[]; threads: string[] }[];
+    calibration: {
+      max_cluster_share: number;
+      trials: { largest_cluster_share: number; rejected_as_blob: boolean }[];
+    };
   };
   for (const topic of tree.topics) {
     const label = topic.label ?? topic.subjects[0] ?? topic.id;
     for (const id of topic.threads) topicOfThread.set(id, { id: topic.id, label });
+  }
+  if (tree.topics.length === 0) {
+    const trials = tree.calibration?.trials ?? [];
+    const tightest = trials.length
+      ? Math.min(...trials.map((t) => t.largest_cluster_share))
+      : null;
+    const cap = tree.calibration?.max_cluster_share ?? 0;
+    topicsRefused.set(
+      list,
+      tightest === null
+        ? "No clustering was attempted."
+        : `Every clustering was refused: even at the tightest threshold one cluster held ` +
+          `${Math.round(tightest * 100)}% of the threads, against a ${Math.round(cap * 100)}% cap. ` +
+          `A topic that is most of the list is not a topic.`,
+    );
   }
 }
 
@@ -432,6 +461,7 @@ const listRows = graph.coverage.lists.map((name) => {
     messages: own.reduce((n, t) => n + t.messages, 0),
     participants: participants.length,
     topics: [...new Set(own.map((t) => t.topic_id).filter(Boolean))].length,
+    topics_refused: topicsRefused.get(name) ?? null,
     utility,
     contributor,
     first_message_at: starts.length ? starts.sort()[0]! : null,

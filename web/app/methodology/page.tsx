@@ -253,7 +253,7 @@ export default async function MethodologyPage() {
         )}
       </Section>
 
-      <Section title="Topics">
+      <Section title="Topics" id="topics">
         <p>
           Threads are clustered by complete-linkage agglomeration over message
           embeddings, and the distance threshold is chosen by held-out prediction rather
@@ -265,7 +265,10 @@ export default async function MethodologyPage() {
           A cap stops any one cluster taking more than a third of the corpus, and threads
           are allowed to belong to no topic rather than being forced into the nearest one.
           A list whose threads are all one conversation therefore contributes no topics at
-          all, which is the correct answer and not a failure.
+          all, which is the correct answer and not a failure — on agentproto every one of
+          the nine candidate thresholds was refused, because even the tightest put 56% of
+          its 24 threads in a single cluster. The list is one charter discussion, and
+          splitting it would have invented structure that is not there.
         </p>
       </Section>
 

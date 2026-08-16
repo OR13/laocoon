@@ -32,6 +32,12 @@ export default async function ListsPage() {
                 ["Topics", String(list.topics)],
               ]}
             />
+            {list.topics_refused && (
+              <p className="text-muted-foreground mt-3 max-w-[76ch] text-xs">
+                <strong className="text-foreground font-medium">No topics.</strong>{" "}
+                {list.topics_refused}
+              </p>
+            )}
             <div className="mt-4 max-w-[46rem]">
               <p className="text-muted-foreground mb-1.5 text-xs">Thread utility</p>
               <LevelBar counts={list.utility} help={UTILITY_HELP} />

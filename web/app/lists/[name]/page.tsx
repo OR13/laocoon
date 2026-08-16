@@ -78,6 +78,19 @@ export default async function ListPage({ params }: { params: Promise<{ name: str
         </section>
       </div>
 
+      <section className="mt-10">
+        <h2 className="mb-3 text-lg font-semibold">Topics</h2>
+        {list.topics_refused && (
+          <p className="text-muted-foreground max-w-[76ch] text-sm">
+            None. {list.topics_refused}{" "}
+            <a className="text-primary underline" href="/methodology/#topics">
+              How clustering is calibrated
+            </a>
+            .
+          </p>
+        )}
+      </section>
+
       {topics.length > 0 && (
         <section className="mt-10">
           <h2 className="mb-3 text-lg font-semibold">Topics</h2>
