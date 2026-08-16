@@ -1,6 +1,6 @@
 import { tidySubject } from "@/lib/graph-model";
 import { cn } from "@/lib/utils";
-import { ENGAGEMENT_META, type Engagement, type MapThread } from "@/components/thread-map";
+import type { ListedThread } from "@/lib/threads";
 
 /**
  * One insight per section.
@@ -84,17 +84,6 @@ export function SplitBar({
   );
 }
 
-function Dot({ state }: { state: Engagement }) {
-  return (
-    <i
-      aria-hidden
-      title={ENGAGEMENT_META[state].label}
-      className="mt-[5px] inline-block size-2.5 shrink-0 rounded-full"
-      style={{ background: `var(${ENGAGEMENT_META[state].token})` }}
-    />
-  );
-}
-
 /**
  * A short list of threads. Never more than a handful, always linked.
  *
@@ -104,12 +93,10 @@ function Dot({ state }: { state: Engagement }) {
  */
 export function ThreadList({
   threads,
-  state,
   empty,
   limit = 6,
 }: {
-  threads: MapThread[];
-  state?: (t: MapThread) => Engagement;
+  threads: ListedThread[];
   empty: string;
   limit?: number;
 }) {
@@ -120,8 +107,7 @@ export function ThreadList({
     <div>
       <ul className="divide-y">
         {threads.slice(0, limit).map((t) => (
-          <li key={t.id} className="flex items-start gap-2.5 py-2.5">
-            {state && <Dot state={state(t)} />}
+          <li key={t.id} className="py-2.5">
             <div className="min-w-0 flex-1">
               <a
                 href={t.href}

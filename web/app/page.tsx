@@ -3,8 +3,7 @@ import { ReviewPanel } from "@/components/review-panel";
 import { OverviewSections } from "@/components/overview-sections";
 import { archiveMessageUrl } from "@/lib/archive";
 import { coverageLine, loadPublic, loadReview } from "@/lib/data";
-import type { MapThread } from "@/components/thread-map";
-import type { NewcomerWin } from "@/components/overview-sections";
+import type { ListedThread } from "@/lib/threads";
 
 export default async function OverviewPage() {
   const { activity, windows, measures, trees, contribution, network } = await loadPublic();
@@ -23,7 +22,7 @@ export default async function OverviewPage() {
     for (const thread of tree.threads) lastMessageAt.set(thread.id, thread.last_message_at);
   }
 
-  const threads: MapThread[] = measures.map((m) => {
+  const threads: ListedThread[] = measures.map((m) => {
     const topic = topicOfThread.get(m.thread_id);
     return {
       id: m.thread_id,
@@ -41,18 +40,6 @@ export default async function OverviewPage() {
       href: archiveMessageUrl(m.thread_id, m.list_name),
     };
   });
-
-  const newcomerWins: NewcomerWin[] = contribution.flatMap((c) =>
-    c.newcomer_wins.map((m) => ({
-      message_id: m.message_id,
-      list_name: c.list_name,
-      gist: m.gist ?? "",
-      sent_at: m.sent_at,
-      replies_from_standing: m.replies_from_standing,
-      thread_messages: m.thread_messages,
-      href: archiveMessageUrl(m.message_id, c.list_name),
-    })),
-  );
 
   return (
     <SiteShell
@@ -80,9 +67,9 @@ export default async function OverviewPage() {
       <OverviewSections
         threads={threads}
         activity={activity}
-        newcomerWins={newcomerWins}
         people={network?.nodes ?? []}
         replies={network?.edges ?? []}
+        networkThreads={network?.threads ?? []}
         daily={network?.daily ?? []}
       />
     </SiteShell>

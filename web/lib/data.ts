@@ -315,6 +315,17 @@ export interface ReplyNetwork {
   publication: string;
   lists: string[];
   daily: { day: string; extensive: number; established: number; some: number; none: number }[];
+  threads: {
+    id: string;
+    subject: string;
+    list_name: string;
+    messages: number;
+    participants: string[];
+    top_record: number;
+    started_at: string | null;
+    last_message_at: string | null;
+    href: string;
+  }[];
   nodes: {
     id: string;
     name: string;

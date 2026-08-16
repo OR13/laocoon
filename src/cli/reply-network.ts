@@ -29,6 +29,7 @@ import { join } from "node:path";
 import type { Event, MessageObserved, PrivateEvent, ReplyGraph } from "../schema/generated.ts";
 import { JsonlEventStore } from "../store/jsonl-store.ts";
 import { assertPublishableArtifact } from "../site/publishable.ts";
+import { archiveMessageUrl } from "../lib/archive.ts";
 import { bandOf, recordScore, type RecordScore } from "../seed/record-score.ts";
 import { JsonlEventStore as PrivateStore } from "../store/jsonl-store.ts";
 import { ARTIFACTS_DIR, EVENTS_DIR, PRIVATE_DIR } from "../lib/paths.ts";
@@ -157,6 +158,13 @@ for (const { eventId, payload } of observed) {
 }
 
 const nodeOf = new Map(graph.nodes.map((n) => [n.message_id, n]));
+/** Which list each thread belongs to, for its archive link. */
+const listOf = new Map<string, string>();
+for (const { eventId, payload } of observed) {
+  if (superseded.has(eventId) || !payload.message_id) continue;
+  const node = nodeOf.get(payload.message_id);
+  if (node) listOf.set(node.thread_id, payload.list_name);
+}
 
 const messages = new Map<string, number>();
 const firstSeen = new Map<string, string>();
@@ -257,6 +265,34 @@ if (sortedDays.length > 0) {
   }
 }
 
+/**
+ * Threads, joined to the people in them.
+ *
+ * Person-replies-to-person answers "who talks to whom" and cannot answer "what
+ * about". A thread node connected to each of its participants makes the second
+ * question a shape in the same picture, and it is still a real network: an
+ * edge means this account posted in this thread.
+ */
+const threadRows = graph.threads
+  .map((t) => {
+    const members = graph.nodes.filter((n) => n.thread_id === t.thread_id);
+    const senders = [...new Set(members.map((n) => n.sender_id))];
+    const scores = senders.map((id) => scoreOf(id)?.score ?? 0);
+    return {
+      id: t.thread_id,
+      subject: t.subject,
+      list_name: listOf.get(t.thread_id) ?? members[0]?.list_name ?? "",
+      messages: members.length,
+      participants: senders.map(slugFor),
+      /** Highest publication record among the people in it. A fact, not a verdict. */
+      top_record: scores.length ? Math.max(...scores) : 0,
+      started_at: t.started_at ?? null,
+      last_message_at: t.last_message_at ?? null,
+      href: archiveMessageUrl(t.thread_id, listOf.get(t.thread_id) ?? ""),
+    };
+  })
+  .sort((a, b) => b.messages - a.messages);
+
 const artifact = {
   schema_version: "1.0.0",
   derived: true,
@@ -272,6 +308,7 @@ const artifact = {
     "different thing and stays local.",
   self_replies_dropped: selfReplies,
   daily: days,
+  threads: threadRows,
   nodes,
   edges: [...pairs.values()].sort((a, b) => b.replies - a.replies),
 };

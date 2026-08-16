@@ -27,69 +27,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Graph from "graphology";
 import Sigma from "sigma";
 import forceAtlas2 from "graphology-layout-forceatlas2";
+import { NodeCircleProgram } from "sigma/rendering";
+import { NodeSquareProgram } from "@sigma/node-square";
 import { useTheme } from "next-themes";
+import { tidySubject } from "@/lib/graph-model";
+import {
+  BAND_META, BAND_ORDER, FILTERS, type Band, type FilterId, type NetworkEdge,
+  type NetworkPerson, type NetworkThread,
+} from "@/lib/record-bands";
 
 const cssVar = (n: string) =>
   getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-export type Band = "none" | "some" | "established" | "extensive";
+export type { Band, NetworkEdge, NetworkPerson, NetworkThread } from "@/lib/record-bands";
+export { BAND_META, BAND_ORDER } from "@/lib/record-bands";
 
-export interface NetworkPerson {
-  id: string;
-  name: string;
-  /** 0-100 from published RFCs, adopted drafts and IETF roles. */
-  score: number;
-  band: Band;
-  rfcs: number;
-  adopted_drafts: number;
-  chairs_now: boolean;
-  in_datatracker: boolean;
-  messages: number;
-  replies_sent: number;
-  replies_received: number;
-  lists: string[];
-  first_seen: string | null;
-}
-export interface NetworkEdge {
-  source: string;
-  target: string;
-  replies: number;
-}
 
-/**
- * Bands of published record. Named for a quantity of work, never for a kind of
- * person — the binary these replace read as a caste mark, which is the whole
- * reason the score exists.
- *
- * Sequential, because the thing encoded is a magnitude: one hue getting
- * darker, with a neutral for the zero that is not a low value but an absence.
- */
-export const BAND_META: Record<Band, { label: string; token: string; help: string }> = {
-  extensive: { label: "60–100", token: "--seq-700", help: "Extensive published record." },
-  established: { label: "30–59", token: "--seq-400", help: "Established published record." },
-  some: { label: "1–29", token: "--seq-250", help: "Some published work." },
-  none: {
-    label: "0",
-    token: "--eng-none",
-    help:
-      "Nothing published under this address in the Datatracker. That is the ordinary " +
-      "state of a new participant and of anyone who contributes without filing documents.",
-  },
-};
-export const BAND_ORDER: Band[] = ["extensive", "established", "some", "none"];
-
-/** What the filter chips offer. Each is one lookup, not a judgement. */
-export const FILTERS = [
-  { id: "all", label: "Everyone", test: () => true },
-  {
-    id: "datatracker",
-    label: "In the Datatracker",
-    test: (p: NetworkPerson) => p.in_datatracker,
-  },
-  { id: "rfc", label: "Has an RFC", test: (p: NetworkPerson) => p.rfcs >= 1 },
-  { id: "rfcs", label: "3 or more RFCs", test: (p: NetworkPerson) => p.rfcs >= 3 },
-] as const;
-export type FilterId = (typeof FILTERS)[number]["id"];
+/** What the detail panel is showing. */
+type Focus =
+  | { kind: "person"; person: NetworkPerson }
+  | { kind: "thread"; thread: NetworkThread };
 
 /** How many names may be drawn at once, before collision pruning. */
 const LABEL_CANDIDATES = 40;
@@ -107,13 +64,18 @@ const LABEL_GUTTER = 12;
  */
 const DEFAULT_MIN_REPLIES = 2;
 
+/** Threads drawn at once, when they are shown. */
+const MAX_THREADS = 60;
+
 export function ReplyNetwork({
   people,
   edges,
+  threads,
   height = 620,
 }: {
   people: NetworkPerson[];
   edges: NetworkEdge[];
+  threads: NetworkThread[];
   height?: number;
 }) {
   const [minReplies, setMinReplies] = useState(DEFAULT_MIN_REPLIES);
@@ -125,10 +87,13 @@ export function ReplyNetwork({
   const place = useRef<() => void>(() => {});
   const { resolvedTheme } = useTheme();
   const [unsupported, setUnsupported] = useState(false);
-  const [selected, setSelected] = useState<NetworkPerson | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [showThreads, setShowThreads] = useState(false);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
 
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
+  const threadById = useMemo(() => new Map(threads.map((t) => [t.id, t])), [threads]);
 
   const shown = useMemo(() => {
     const test = FILTERS.find((f) => f.id === filter)!.test;
@@ -140,9 +105,34 @@ export function ReplyNetwork({
     // information the picture is trying to carry — the counts are in the
     // legend, and every account is on the threads page.
     const connected = new Set(kept.flatMap((e) => [e.source, e.target]));
-    return { edges: kept, people: people.filter((p) => connected.has(p.id)) };
-  }, [people, edges, minReplies, filter]);
+    const visiblePeople = people.filter((p) => connected.has(p.id));
+    // Threads are the discussions those people are actually in. Capped,
+    // because every thread at once is a second hairball on top of the first.
+    const visibleThreads = showThreads
+      ? threads
+          .filter((t) => t.participants.filter((id) => connected.has(id)).length >= 2)
+          .sort((a, b) => b.messages - a.messages)
+          .slice(0, MAX_THREADS)
+      : [];
+    return { edges: kept, people: visiblePeople, threads: visibleThreads };
+  }, [people, edges, threads, minReplies, filter, showThreads]);
 
+  const focus: Focus | null = useMemo(() => {
+    if (!focusKey) return null;
+    if (focusKey.startsWith("thread:")) {
+      const thread = threadById.get(focusKey.slice("thread:".length));
+      return thread ? { kind: "thread", thread } : null;
+    }
+    const person = byId.get(focusKey);
+    return person ? { kind: "person", person } : null;
+  }, [focusKey, byId, threadById]);
+
+  // Sigma is constructed once and never torn down. Rebuilding it on every
+  // filter change threw "could not find a suitable program for node type
+  // circle" on the second construction and took the page down to an error
+  // screen — the renderer was relying on shared default program classes
+  // surviving a `kill()`. Rebuilding also discarded the camera and re-ran the
+  // force pass, so the picture reset every time a chip was pressed.
   useEffect(() => {
     if (!boxRef.current) return;
     try {
@@ -157,50 +147,11 @@ export function ReplyNetwork({
     }
 
     const graph = new Graph({ multi: false, type: "undirected" });
-    const maxMessages = shown.people.reduce((m, p) => Math.max(m, p.messages), 1);
-    for (const p of shown.people) {
-      graph.addNode(p.id, {
-        label: p.name,
-        band: p.band,
-        size: 3 + 17 * Math.sqrt(p.messages / maxMessages),
-        messages: p.messages,
-        // Seeded on a circle rather than at random, so the force pass starts
-        // from something spread out and converges to the same picture on every
-        // load. A random seed made the layout different on every refresh.
-        x: Math.cos((shown.people.indexOf(p) / shown.people.length) * 2 * Math.PI),
-        y: Math.sin((shown.people.indexOf(p) / shown.people.length) * 2 * Math.PI),
-      });
-    }
-    for (const e of shown.edges) {
-      if (!graph.hasNode(e.source) || !graph.hasNode(e.target)) continue;
-      if (graph.hasEdge(e.source, e.target)) {
-        graph.setEdgeAttribute(e.source, e.target, "weight", e.replies);
-        continue;
-      }
-      graph.addEdge(e.source, e.target, {
-        weight: e.replies,
-        size: Math.min(3, 0.3 + Math.sqrt(e.replies) * 0.4),
-      });
-    }
-
-    forceAtlas2.assign(graph, {
-      iterations: 400,
-      settings: {
-        ...forceAtlas2.inferSettings(graph),
-        barnesHutOptimize: graph.order > 200,
-        gravity: 0.8,
-        // Wide, because the point of the picture is the gaps between groups.
-        scalingRatio: 40,
-        // Sizes vary by 6x here; without this the big accounts overlap their
-        // own neighbourhoods and the core becomes one solid disc.
-        adjustSizes: true,
-        outboundAttractionDistribution: true,
-      },
-    });
-
     let renderer: Sigma;
     try {
       renderer = new Sigma(graph, boxRef.current, {
+        // Named explicitly rather than inherited: see above.
+        nodeProgramClasses: { circle: NodeCircleProgram, square: NodeSquareProgram },
         renderLabels: true,
         labelDensity: 0.3,
         labelGridCellSize: 140,
@@ -210,24 +161,19 @@ export function ReplyNetwork({
         stagePadding: 50,
         defaultEdgeColor: cssVar("--thread-line") || "#c3c2bb",
       });
-    } catch {
-      setUnsupported(true);
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : String(error));
       return;
     }
     sigmaRef.current = renderer;
     graphRef.current = graph;
     (window as unknown as { __laocoon?: unknown }).__laocoon = { renderer, graph };
 
-    renderer.on("clickNode", ({ node }) => setSelected(byId.get(node) ?? null));
-    renderer.on("clickStage", () => setSelected(null));
+    renderer.on("clickNode", ({ node }) => setFocusKey(node));
+    renderer.on("clickStage", () => setFocusKey(null));
     renderer.on("enterNode", ({ node }) => setHovered(node));
     renderer.on("leaveNode", () => setHovered(null));
 
-    // Dragging, driven by sigma's own hit test rather than by its `downNode`
-    // event. That event never fired here — `moveBody` and `upStage` did, so
-    // the captor was live and the node simply was not being matched at
-    // mousedown — while `getNodeAtPosition` returns the right node for the
-    // same coordinates. Going straight to the hit test skips the question.
     const container = renderer.getContainer() as HTMLElement;
 
     // sigma measures the container once and does not watch it. The review
@@ -239,7 +185,6 @@ export function ReplyNetwork({
     observer.observe(container);
 
     let dragging: string | null = null;
-
     const relative = (event: MouseEvent) => {
       const box = container.getBoundingClientRect();
       return { x: event.clientX - box.left, y: event.clientY - box.top };
@@ -279,7 +224,6 @@ export function ReplyNetwork({
       if (!hit) return;
       dragging = hit;
       graph.setNodeAttribute(hit, "highlighted", true);
-      // Otherwise the canvas pans under the node being moved.
       renderer.getCamera().disable();
       event.preventDefault();
     };
@@ -313,7 +257,73 @@ export function ReplyNetwork({
       sigmaRef.current = null;
       graphRef.current = null;
     };
-  }, [shown, byId]);
+  }, []);
+
+  /** Fill the existing graph. Runs on every filter change; builds nothing. */
+  useEffect(() => {
+    const graph = graphRef.current;
+    const renderer = sigmaRef.current;
+    if (!graph || !renderer) return;
+
+    graph.clear();
+    const maxMessages = shown.people.reduce((m, p) => Math.max(m, p.messages), 1);
+    shown.people.forEach((p, index) => {
+      graph.addNode(p.id, {
+        label: p.name,
+        kind: "person",
+        band: p.band,
+        type: "circle",
+        size: 3 + 17 * Math.sqrt(p.messages / maxMessages),
+        weight: p.messages,
+        // Seeded on a circle rather than at random, so the force pass starts
+        // spread out and converges to the same picture on every load.
+        x: Math.cos((index / shown.people.length) * 2 * Math.PI),
+        y: Math.sin((index / shown.people.length) * 2 * Math.PI),
+      });
+    });
+    const maxThread = shown.threads.reduce((m, t) => Math.max(m, t.messages), 1);
+    shown.threads.forEach((t, index) => {
+      graph.addNode(`thread:${t.id}`, {
+        label: tidySubject(t.subject),
+        kind: "thread",
+        // Squares, so a discussion never reads as a person.
+        type: "square",
+        size: 3 + 12 * Math.sqrt(t.messages / maxThread),
+        weight: t.messages,
+        x: Math.cos((index / Math.max(1, shown.threads.length)) * 2 * Math.PI) * 1.4,
+        y: Math.sin((index / Math.max(1, shown.threads.length)) * 2 * Math.PI) * 1.4,
+      });
+    });
+    for (const e of shown.edges) {
+      if (!graph.hasNode(e.source) || !graph.hasNode(e.target)) continue;
+      if (graph.hasEdge(e.source, e.target)) continue;
+      graph.addEdge(e.source, e.target, {
+        weight: e.replies,
+        size: Math.min(3, 0.3 + Math.sqrt(e.replies) * 0.4),
+      });
+    }
+    for (const t of shown.threads) {
+      for (const person of t.participants) {
+        if (!graph.hasNode(person)) continue;
+        if (graph.hasEdge(`thread:${t.id}`, person)) continue;
+        graph.addEdge(`thread:${t.id}`, person, { weight: 1, size: 0.4 });
+      }
+    }
+
+    forceAtlas2.assign(graph, {
+      iterations: 400,
+      settings: {
+        ...forceAtlas2.inferSettings(graph),
+        barnesHutOptimize: graph.order > 200,
+        gravity: 0.8,
+        // Wide, because the point of the picture is the gaps between groups.
+        scalingRatio: 40,
+        adjustSizes: true,
+        outboundAttractionDistribution: true,
+      },
+    });
+    renderer.refresh();
+  }, [shown]);
 
   /** Colour from standing. Re-runs on theme change. */
   useEffect(() => {
@@ -323,8 +333,13 @@ export function ReplyNetwork({
     const colours = Object.fromEntries(
       BAND_ORDER.map((b) => [b, cssVar(BAND_META[b].token)]),
     ) as Record<Band, string>;
+    const threadInk = cssVar("--thread-line") || "#8b8a85";
     graph.forEachNode((key, attrs) =>
-      graph.setNodeAttribute(key, "color", colours[attrs.band as Band]),
+      graph.setNodeAttribute(
+        key,
+        "color",
+        attrs.kind === "thread" ? threadInk : colours[attrs.band as Band],
+      ),
     );
     renderer.setSetting("labelColor", { color: cssVar("--cy-ink") || "#1c1917" });
     renderer.setSetting("defaultEdgeColor", cssVar("--thread-line") || "#c3c2bb");
@@ -337,20 +352,26 @@ export function ReplyNetwork({
     const renderer = sigmaRef.current;
     const graph = graphRef.current;
     if (!renderer || !graph) return;
-    const focus = selected?.id ?? hovered;
+    const centre = focusKey ?? hovered;
     const near =
-      focus && graph.hasNode(focus) ? new Set([focus, ...graph.neighbors(focus)]) : null;
+      centre && graph.hasNode(centre) ? new Set([centre, ...graph.neighbors(centre)]) : null;
+    // Not "#8882": sigma's WebGL parser does not read four-digit hex with an
+    // alpha nibble, and every dimmed node came out olive — which is what made
+    // hovering unreadable. rgba() is parsed.
+    const dim = "rgba(140,138,132,0.22)";
     renderer.setSetting("nodeReducer", (key, data) => {
-      if (near && !near.has(key)) return { ...data, color: "#8882", label: "" };
-      return { ...data, label: drawn.current.has(key) || key === focus ? data.label : "" };
+      if (near && !near.has(key)) return { ...data, color: dim, label: "" };
+      return { ...data, label: drawn.current.has(key) || key === centre ? data.label : "" };
     });
     renderer.setSetting("edgeReducer", (key, data) => {
       if (!near) return data;
       const [s, t] = graph.extremities(key);
-      return near.has(s) && near.has(t) ? data : { ...data, hidden: true };
+      // Kept rather than hidden, faintly: removing them made the neighbourhood
+      // float free of the picture it belongs to.
+      return near.has(s) && near.has(t) ? data : { ...data, color: dim };
     });
     renderer.refresh({ skipIndexation: true });
-  }, [selected, hovered, shown]);
+  }, [focusKey, hovered, shown]);
 
   /** Greedy name placement: the busiest accounts first, no two overlapping. */
   useEffect(() => {
@@ -369,8 +390,8 @@ export function ReplyNetwork({
         .nodes()
         .sort(
           (a, b) =>
-            (graph.getNodeAttribute(b, "messages") as number) -
-            (graph.getNodeAttribute(a, "messages") as number),
+            (graph.getNodeAttribute(b, "weight") as number) -
+            (graph.getNodeAttribute(a, "weight") as number),
         )
         .slice(0, LABEL_CANDIDATES);
       const kept: { x1: number; y1: number; x2: number; y2: number }[] = [];
@@ -403,17 +424,24 @@ export function ReplyNetwork({
     };
   }, [shown]);
 
+  const threadsOf = useCallback(
+    (personId: string) =>
+      threads.filter((t) => t.participants.includes(personId)).sort((a, b) => b.messages - a.messages),
+    [threads],
+  );
+
   const reset = useCallback(() => {
     sigmaRef.current?.getCamera().animate({ x: 0.5, y: 0.5, ratio: 1, angle: 0 }, { duration: 320 });
   }, []);
 
-  if (unsupported) {
+  if (unsupported || failure) {
     return (
       <div
         style={{ height }}
-        className="bg-card text-muted-foreground flex w-full items-center justify-center rounded-lg border text-sm"
+        className="bg-card text-muted-foreground flex w-full flex-col items-center justify-center gap-1 rounded-lg border p-6 text-center text-sm"
       >
-        This picture needs WebGL, which this browser did not provide.
+        <p className="font-medium">This picture needs WebGL, which this browser did not provide.</p>
+        {failure && <p className="text-xs">{failure}</p>}
       </div>
     );
   }
@@ -470,9 +498,21 @@ export function ReplyNetwork({
             </button>
           ))}
         </div>
+        <button
+          onClick={() => setShowThreads((v) => !v)}
+          aria-pressed={showThreads}
+          className={
+            showThreads
+              ? "bg-primary text-primary-foreground rounded-md border px-3 py-1.5 text-xs"
+              : "text-muted-foreground hover:bg-accent rounded-md border px-3 py-1.5 text-xs"
+          }
+        >
+          {showThreads ? "Hide threads" : "Show threads"}
+        </button>
         <span className="text-muted-foreground text-xs">
           {shown.people.length} of {people.length} people, {shown.edges.length} pairs
           {minReplies > 1 && " who answered each other more than once"}
+          {showThreads && `, ${shown.threads.length} threads`}
         </span>
       </div>
 
@@ -495,28 +535,84 @@ export function ReplyNetwork({
         </span>
       </div>
 
-      {selected && (
+      {focus?.kind === "person" && (
         <div className="bg-card mt-3 rounded-lg border p-3">
           <div className="flex flex-wrap items-baseline gap-x-3">
-            <span className="text-sm font-semibold">{selected.name}</span>
+            <span className="text-sm font-semibold">{focus.person.name}</span>
             <span className="tnum text-muted-foreground text-xs">
-              publication record {selected.score}/100
+              publication record {focus.person.score}/100
             </span>
           </div>
           <p className="text-muted-foreground tnum mt-1 text-xs">
-            {selected.rfcs} RFC{selected.rfcs === 1 ? "" : "s"} ·{" "}
-            {selected.adopted_drafts} adopted draft{selected.adopted_drafts === 1 ? "" : "s"}
-            {selected.chairs_now && " · chairs a working group"}
-            {!selected.in_datatracker && " · no Datatracker record"}
+            {focus.person.rfcs} RFC{focus.person.rfcs === 1 ? "" : "s"} ·{" "}
+            {focus.person.adopted_drafts} adopted draft
+            {focus.person.adopted_drafts === 1 ? "" : "s"}
+            {focus.person.chairs_now && " · chairs a working group"}
+            {!focus.person.in_datatracker && " · no Datatracker record"}
           </p>
           <p className="text-muted-foreground tnum mt-0.5 text-xs">
-            {selected.messages} message{selected.messages === 1 ? "" : "s"} ·{" "}
-            {selected.replies_sent} repl{selected.replies_sent === 1 ? "y" : "ies"} sent ·{" "}
-            {selected.replies_received} received · {selected.lists.join(", ")}
-            {selected.first_seen && ` · first posted ${selected.first_seen.slice(0, 10)}`}
+            {focus.person.messages} message{focus.person.messages === 1 ? "" : "s"} ·{" "}
+            {focus.person.replies_sent} repl{focus.person.replies_sent === 1 ? "y" : "ies"} sent ·{" "}
+            {focus.person.replies_received} received · {focus.person.lists.join(", ")}
+            {focus.person.first_seen && ` · first posted ${focus.person.first_seen.slice(0, 10)}`}
           </p>
+          {threadsOf(focus.person.id).length > 0 && (
+            <p className="text-muted-foreground mt-2 text-xs">
+              <span className="text-foreground font-medium">In:</span>{" "}
+              {threadsOf(focus.person.id)
+                .slice(0, 4)
+                .map((t) => tidySubject(t.subject))
+                .join(" · ")}
+            </p>
+          )}
         </div>
       )}
+
+      {focus?.kind === "thread" && (
+        <div className="bg-card mt-3 rounded-lg border p-3">
+          <a
+            href={focus.thread.href}
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-primary text-sm font-semibold hover:underline"
+          >
+            {tidySubject(focus.thread.subject)} ↗
+          </a>
+          <p className="text-muted-foreground tnum mt-1 text-xs">
+            {focus.thread.messages} message{focus.thread.messages === 1 ? "" : "s"} ·{" "}
+            {focus.thread.participants.length} participant
+            {focus.thread.participants.length === 1 ? "" : "s"} · {focus.thread.list_name}
+            {focus.thread.last_message_at &&
+              ` · last message ${focus.thread.last_message_at.slice(0, 10)}`}
+          </p>
+          <div className="mt-2">
+            <span className="text-foreground text-xs font-medium">Who is in it</span>
+            <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+              {focus.thread.participants
+                .map((id) => byId.get(id))
+                .filter((p): p is NetworkPerson => Boolean(p))
+                .sort((a, b) => b.score - a.score || b.messages - a.messages)
+                .map((p) => (
+                  <li key={p.id} className="flex items-center gap-1.5 text-xs">
+                    <i
+                      className="inline-block size-2.5 shrink-0 rounded-full"
+                      style={{ background: `var(${BAND_META[p.band].token})` }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setFocusKey(p.id)}
+                      className="hover:text-primary hover:underline"
+                    >
+                      {p.name}
+                    </button>
+                    <span className="tnum text-muted-foreground">{p.score}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

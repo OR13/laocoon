@@ -288,6 +288,95 @@ test.describe("reply network", () => {
     expect(prolific).toBeGreaterThan(0);
   });
 
+  test("every filter can be pressed without taking the page down", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    // Rebuilding Sigma per filter threw "could not find a suitable program for
+    // node type circle" on the second construction and replaced the page with
+    // an error screen. One renderer now, repopulated in place.
+    for (const name of ["In the Datatracker", "Has an RFC", "3 or more RFCs", "Everyone"]) {
+      await page.getByRole("button", { name, exact: true }).click();
+      await page.waitForTimeout(1600);
+      const order = await page.evaluate(
+        () => (window as unknown as { __laocoon?: { graph?: { order: number } } }).__laocoon?.graph?.order ?? -1,
+      );
+      expect(order, `${name} left no graph`).toBeGreaterThan(0);
+    }
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("hovering dims without turning the graph olive", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    await page.evaluate(() =>
+      document.querySelector("canvas")?.scrollIntoView({ block: "center" }),
+    );
+    await page.waitForTimeout(400);
+    const at = await page.evaluate(() => {
+      const { renderer, graph } = (window as unknown as { __laocoon: { renderer: any; graph: any } })
+        .__laocoon;
+      const key = graph
+        .nodes()
+        .sort(
+          (a: string, b: string) =>
+            graph.getNodeAttribute(b, "weight") - graph.getNodeAttribute(a, "weight"),
+        )[3];
+      const p = renderer.framedGraphToViewport(renderer.getNodeDisplayData(key));
+      const c = (renderer.getContainer() as HTMLElement).getBoundingClientRect();
+      return { x: c.left + p.x, y: c.top + p.y };
+    });
+    await page.mouse.move(at.x, at.y);
+    await page.waitForTimeout(500);
+    const dimmed = await page.evaluate(() => {
+      const { renderer, graph } = (window as unknown as { __laocoon: { renderer: any; graph: any } })
+        .__laocoon;
+      const reduce = renderer.getSetting("nodeReducer");
+      const colours = new Set<string>();
+      graph.forEachNode((k: string, a: Record<string, unknown>) =>
+        colours.add(String(reduce(k, a).color)),
+      );
+      return [...colours];
+    });
+    // "#8882" — four-digit hex with an alpha nibble — is not parsed by sigma's
+    // WebGL path, and every dimmed node came out olive.
+    expect(dimmed.some((c) => /^#[0-9a-f]{4}$/i.test(c))).toBe(false);
+  });
+
+  test("a thread can be opened and names who is in it", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    await page.getByRole("button", { name: "Show threads", exact: true }).click();
+    await page.waitForTimeout(2200);
+    await page.evaluate(() =>
+      document.querySelector("canvas")?.scrollIntoView({ block: "center" }),
+    );
+    await page.waitForTimeout(400);
+    const at = await page.evaluate(() => {
+      const { renderer, graph } = (window as unknown as { __laocoon: { renderer: any; graph: any } })
+        .__laocoon;
+      const keys: string[] = [];
+      graph.forEachNode((k: string, a: Record<string, unknown>) => {
+        if (a.kind === "thread") keys.push(k);
+      });
+      keys.sort(
+        (a, b) =>
+          (graph.getNodeAttribute(b, "weight") as number) -
+          (graph.getNodeAttribute(a, "weight") as number),
+      );
+      const p = renderer.framedGraphToViewport(renderer.getNodeDisplayData(keys[0]!));
+      const c = (renderer.getContainer() as HTMLElement).getBoundingClientRect();
+      return { x: c.left + p.x, y: c.top + p.y, threads: keys.length };
+    });
+    expect(at.threads).toBeGreaterThan(0);
+    await page.mouse.click(at.x, at.y);
+    await page.waitForTimeout(600);
+    await expect(page.getByText("Who is in it")).toBeVisible();
+    await expect(page.getByRole("link", { name: /↗/ }).first()).toHaveAttribute(
+      "href",
+      /mailarchive\.ietf\.org/,
+    );
+  });
+
   test("reset view returns the camera to the default framing", async ({ page }) => {
     await page.goto("/index.html");
     await settle(page);

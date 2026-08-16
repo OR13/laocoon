@@ -7,11 +7,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { RANGES } from "@/components/time-range";
 import { Headline, Section, SplitBar, ThreadList } from "@/components/sections";
-import {
-  ENGAGEMENT_META, ENGAGEMENT_ORDER, engagementOf, type MapThread,
-} from "@/components/thread-map";
+import type { ListedThread } from "@/lib/threads";
 import dynamic from "next/dynamic";
-import { BAND_META, BAND_ORDER, type NetworkEdge, type NetworkPerson } from "@/components/reply-network";
+import {
+  BAND_META, BAND_ORDER, type NetworkEdge, type NetworkPerson, type NetworkThread,
+} from "@/lib/record-bands";
 
 // sigma reads WebGL2RenderingContext at import time, absent during prerender.
 const ReplyNetwork = dynamic(
@@ -42,7 +42,7 @@ import { cn } from "@/lib/utils";
  */
 
 /** Threads whose last message falls inside the lookback window. */
-function inWindow(threads: MapThread[], days: number): MapThread[] {
+function inWindow(threads: ListedThread[], days: number): ListedThread[] {
   if (days <= 0) return threads;
   const newest = threads.reduce(
     (latest, t) => (t.last_message_at && t.last_message_at > latest ? t.last_message_at : latest),
@@ -53,30 +53,19 @@ function inWindow(threads: MapThread[], days: number): MapThread[] {
   return threads.filter((t) => (t.last_message_at ?? "") >= cutoff);
 }
 
-/** A newcomer's first message that drew a standing reply, link already built. */
-export interface NewcomerWin {
-  message_id: string;
-  list_name: string;
-  gist: string;
-  sent_at: string | null;
-  replies_from_standing: number;
-  thread_messages: number;
-  href: string;
-}
-
 export function OverviewSections({
   threads,
   activity,
-  newcomerWins,
   people,
   replies,
+  networkThreads,
   daily,
 }: {
-  threads: MapThread[];
+  threads: ListedThread[];
   activity: Activity | null;
-  newcomerWins: NewcomerWin[];
   people: NetworkPerson[];
   replies: NetworkEdge[];
+  networkThreads: NetworkThread[];
   daily: { day: string; extensive: number; established: number; some: number; none: number }[];
 }) {
   const [days, setDays] = useState(30);
@@ -89,30 +78,12 @@ export function OverviewSections({
     return list === "all" ? windowed : windowed.filter((t) => t.list_name === list);
   }, [threads, days, list]);
 
-  const byState = useMemo(() => {
-    const out = { answering: [] as MapThread[], present: [] as MapThread[], none: [] as MapThread[] };
-    for (const t of visible) out[engagementOf(t)].push(t);
-    return out;
-  }, [visible]);
-
   const busiest = useMemo(
     () => [...visible].sort((a, b) => b.messages - a.messages || b.participants - a.participants),
     [visible],
   );
 
-  const messagesIn = (rows: MapThread[]) => rows.reduce((n, t) => n + t.messages, 0);
-  const totalMessages = messagesIn(visible);
-  const unansweredMessages = messagesIn(byState.none);
-  const sharePct = totalMessages ? Math.round((unansweredMessages / totalMessages) * 100) : 0;
-
-  const newcomers = useMemo(
-    () =>
-      newcomerWins
-        .filter((m) => list === "all" || m.list_name === list)
-        .sort((a, b) => (b.sent_at ?? "").localeCompare(a.sent_at ?? ""))
-        .slice(0, 6),
-    [newcomerWins, list],
-  );
+  const totalMessages = visible.reduce((n, t) => n + t.messages, 0);
 
   // Messages per day by the sender's publication record. Same unit in every
   // band, so the bands stack and the total is the day's traffic.
@@ -172,7 +143,7 @@ export function OverviewSections({
           </a>
           . Drag a node to pull it out of the pile.
         </p>
-        <ReplyNetwork people={people} edges={replies} height={640} />
+        <ReplyNetwork people={people} edges={replies} threads={networkThreads} height={640} />
       </Section>
 
       <Section id="threads" question="Busiest threads">
