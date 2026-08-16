@@ -272,6 +272,36 @@ test.describe("reply network", () => {
     expect(Math.hypot(after.gx - at.gx, after.gy - at.gy)).toBeGreaterThan(0.5);
   });
 
+  test("the tier picker draws every thread and then the topics", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    const nodes = () =>
+      page.evaluate(
+        () => (window as unknown as { __laocoon: { graph: any } }).__laocoon.graph.order,
+      );
+    const people = await nodes();
+    await page.getByRole("button", { name: "+ threads", exact: true }).click();
+    await page.waitForTimeout(2600);
+    const withThreads = await nodes();
+    await page.getByRole("button", { name: "+ topics", exact: true }).click();
+    await page.waitForTimeout(2600);
+    const withTopics = await nodes();
+    console.log(`tiers: people ${people}, +threads ${withThreads}, +topics ${withTopics}`);
+    // Uncapped at the operator's direction: a cap silently answers "what is on
+    // this list" with "the top sixty".
+    expect(withThreads).toBeGreaterThan(people + 200);
+    expect(withTopics).toBeGreaterThan(withThreads);
+  });
+
+  test("a person profile page exists and names their record", async ({ page }) => {
+    await page.goto("/people/adrian-farrel/");
+    await page.waitForTimeout(900);
+    await expect(page.getByText("Contributor score")).toBeVisible();
+    await expect(page.getByText("published RFCs", { exact: false })).toBeVisible();
+    await expect(page.getByText("Laocoön utility score", { exact: false })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Who they exchange with" })).toBeVisible();
+  });
+
   test("the record filters change the picture", async ({ page }) => {
     await page.goto("/index.html");
     await settle(page);
@@ -345,8 +375,10 @@ test.describe("reply network", () => {
   test("a thread can be opened and names who is in it", async ({ page }) => {
     await page.goto("/index.html");
     await settle(page);
-    await page.getByRole("button", { name: "Show threads", exact: true }).click();
-    await page.waitForTimeout(2200);
+    // The threads toggle became an additive tier picker: People / + threads /
+    // + topics, so every thread is drawn rather than a capped sixty.
+    await page.getByRole("button", { name: "+ threads", exact: true }).click();
+    await page.waitForTimeout(2600);
     await page.evaluate(() =>
       document.querySelector("canvas")?.scrollIntoView({ block: "center" }),
     );

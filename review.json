@@ -1,26 +1,26 @@
 {
-  "cycle": "2026-08-16-record",
+  "cycle": "2026-08-16-scores",
   "pending": true,
-  "title": "Publication record score, and a graph you can pull apart",
+  "title": "Laocoön contributor and utility scores, profiles, uncapped tiers",
   "summary": "",
   "focus": [
     {
       "id": "network",
       "target": "[data-review='network']",
-      "title": "Colour is now a score out of 100, not a binary",
-      "ask": "Standing is gone. Each account is scored on what it has published — 40 points of RFCs, 20 of adopted drafts, 25 for chairing, 15 for AD/IAB/IESG, the counted terms saturating. Filters for the Datatracker and for RFC counts are above the legend, and nodes drag. Does the formula match how you would weigh a record?"
+      "title": "People / + threads / + topics — 81, 387, 427 nodes",
+      "ask": "The cap is gone and topics are a tier, so the space is walkable: click a topic to see its threads, a thread to see who is in it, a person to see their record. Is the topic tier what you needed to reason about the space, or does it need to carry something else?"
     },
     {
       "id": "network",
       "target": "[data-review='network']",
-      "title": "Three bugs the graph was hiding",
-      "ask": "It was rendering 304px narrower than its container and jumping 152px the first time you touched it; hovering moved the whole picture; and dragging latched but never moved anything because sigma stops mousemove propagation on the document. All three are fixed and tested. Does it feel right to handle now?"
+      "title": "Contributor score is now an S-curve",
+      "ask": "0 units scores 0, 3 units 12, 8 units 41, 12 units 66, 20 units 92. Steepest where the interesting distinctions are, flat at the top so 83 RFCs and 25 land together. Weights are 1 per RFC, 1 per adopted draft, 5 for chairing now, 2 for having chaired, 4 for AD/IAB/IESG. Are those the right weights?"
     },
     {
-      "id": "trend",
-      "target": "[data-review='trend']",
-      "title": "897 of 1,338 messages come from accounts with no published record",
-      "ask": "The trend is messages per day stacked by the sender's score band, replacing the standing/new framing you called offensive. Same unit in every band, so the height is the traffic and the composition is who produced it. Is this the comparison you wanted?"
+      "id": "threads",
+      "target": "[data-review='threads']",
+      "title": "Utility score: 36 high, 156 medium, 198 low",
+      "ask": "Low is either a thread of 6+ that two or three accounts carried at 80%+, or a short exchange between two accounts with no published record. Two experts working a detail score the same as two amplifying accounts — there is a test asserting that, because the day they differ is the day this became a provenance detector. Is that the right line?"
     }
   ]
 }

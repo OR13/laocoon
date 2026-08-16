@@ -11,7 +11,7 @@ import type { ListedThread } from "@/lib/threads";
 import dynamic from "next/dynamic";
 import {
   BAND_META, BAND_ORDER, type NetworkEdge, type NetworkPerson, type NetworkThread,
-} from "@/lib/record-bands";
+} from "@/lib/scores";
 
 // sigma reads WebGL2RenderingContext at import time, absent during prerender.
 const ReplyNetwork = dynamic(
@@ -136,9 +136,9 @@ export function OverviewSections({
       <Section id="network" question="Who is talking to whom">
         <p className="text-muted-foreground mb-4 max-w-[76ch] text-sm">
           Everyone who has posted to either list, joined by who answered whom. Colour is
-          each account&apos;s published IETF record — RFCs, adopted drafts and roles, scored
-          out of 100 and{" "}
-          <a className="text-primary underline" href="/methodology/#record-score">
+          each account&apos;s Laocoön contributor score — published RFCs, adopted drafts and
+          roles on a 0-100 curve, and{" "}
+          <a className="text-primary underline" href="/methodology/#scores">
             defined here
           </a>
           . Drag a node to pull it out of the pile.
@@ -154,11 +154,11 @@ export function OverviewSections({
       </Section>
 
       {trend.length > 1 && (
-        <Section id="trend" question="Messages per day, by the sender's published record">
+        <Section id="trend" question="Messages per day, by the sender's contributor score">
           <p className="text-muted-foreground mb-4 max-w-[76ch] text-sm">
-            Every message in the window, stacked by how much its sender has published in
-            the IETF. The bands share one unit, so the height is the day&apos;s traffic and
-            the composition is who produced it.
+            Every message in the window, stacked by the sender&apos;s Laocoön contributor
+            score. The bands share one unit, so the height is the day&apos;s traffic and the
+            composition is who produced it.
           </p>
           <div className="h-[220px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -179,7 +179,7 @@ export function OverviewSections({
                     stroke={`var(${BAND_META[b].token})`}
                     fill={`var(${BAND_META[b].token})`}
                     fillOpacity={0.85}
-                    name={`${BAND_META[b].label} published record`}
+                    name={`Contributor score ${BAND_META[b].label}`}
                   />
                 ))}
               </AreaChart>

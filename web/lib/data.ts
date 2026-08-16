@@ -12,6 +12,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ARTIFACTS_DIR, EVENTS_DIR, IS_PRIVATE_BUILD, PRIVATE_DIR, repoPath } from "./paths";
+import type { NetworkEdge, NetworkPerson, NetworkThread } from "./scores";
 
 export const PUBLISHABLE_EVENT_TYPES = [
   "ThreadMeasured",
@@ -315,33 +316,11 @@ export interface ReplyNetwork {
   publication: string;
   lists: string[];
   daily: { day: string; extensive: number; established: number; some: number; none: number }[];
-  threads: {
-    id: string;
-    subject: string;
-    list_name: string;
-    messages: number;
-    participants: string[];
-    top_record: number;
-    started_at: string | null;
-    last_message_at: string | null;
-    href: string;
-  }[];
-  nodes: {
-    id: string;
-    name: string;
-    score: number;
-    band: "none" | "some" | "established" | "extensive";
-    rfcs: number;
-    adopted_drafts: number;
-    chairs_now: boolean;
-    in_datatracker: boolean;
-    messages: number;
-    replies_sent: number;
-    replies_received: number;
-    lists: string[];
-    first_seen: string | null;
-  }[];
-  edges: { source: string; target: string; replies: number }[];
+  // The shapes live in lib/scores.ts. Declaring them a second time here is how
+  // the page and the artifact drifted apart the first time.
+  threads: NetworkThread[];
+  nodes: NetworkPerson[];
+  edges: NetworkEdge[];
 }
 
 export interface PublicData {

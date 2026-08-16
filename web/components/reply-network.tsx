@@ -32,16 +32,64 @@ import { NodeSquareProgram } from "@sigma/node-square";
 import { useTheme } from "next-themes";
 import { tidySubject } from "@/lib/graph-model";
 import {
-  BAND_META, BAND_ORDER, FILTERS, type Band, type FilterId, type NetworkEdge,
-  type NetworkPerson, type NetworkThread,
-} from "@/lib/record-bands";
+  BAND_META, BAND_ORDER, FILTERS, UTILITY_META, UTILITY_ORDER, type Band, type FilterId,
+  type NetworkEdge, type NetworkPerson, type NetworkThread, type Utility,
+} from "@/lib/scores";
 
 const cssVar = (n: string) =>
   getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-export type { Band, NetworkEdge, NetworkPerson, NetworkThread } from "@/lib/record-bands";
-export { BAND_META, BAND_ORDER } from "@/lib/record-bands";
+/**
+ * The label box drawn under the pointer.
+ *
+ * sigma's default paints a **white** rounded box and then writes the label in
+ * whatever `labelColor` says. In dark mode that is near-white ink on a white
+ * box: hovering a node made its own name disappear. This reads the theme's
+ * surface and ink at draw time, so the box always contrasts with the text
+ * inside it.
+ */
+function drawHover(
+  context: CanvasRenderingContext2D,
+  data: { x: number; y: number; size: number; label: string | null },
+): void {
+  if (!data.label) return;
+  const surface = cssVar("--card") || "#ffffff";
+  const ink = cssVar("--cy-ink") || "#1c1917";
+  const edge = cssVar("--thread-line") || "#c3c2bb";
+  const size = 14;
+  context.font = `${size}px ui-sans-serif, system-ui, sans-serif`;
+  const width = context.measureText(data.label).width + 16;
+  const height = size + 12;
+  const x = data.x + data.size + 4;
+  const y = data.y - height / 2;
 
+  context.beginPath();
+  context.fillStyle = surface;
+  context.strokeStyle = edge;
+  context.lineWidth = 1;
+  context.roundRect(x, y, width, height, 4);
+  context.fill();
+  context.stroke();
+
+  context.fillStyle = ink;
+  context.textBaseline = "middle";
+  context.fillText(data.label, x + 8, data.y);
+}
+
+export type { Band, NetworkEdge, NetworkPerson, NetworkThread } from "@/lib/scores";
+export { BAND_META, BAND_ORDER } from "@/lib/scores";
+
+
+/**
+ * Which tiers are drawn. Additive, because a topic is only meaningful once its
+ * threads are on screen.
+ */
+type Layer = "people" | "threads" | "topics";
+const LAYERS: { id: Layer; label: string }[] = [
+  { id: "people", label: "People" },
+  { id: "threads", label: "+ threads" },
+  { id: "topics", label: "+ topics" },
+];
 
 /** What the detail panel is showing. */
 type Focus =
@@ -64,9 +112,6 @@ const LABEL_GUTTER = 12;
  */
 const DEFAULT_MIN_REPLIES = 2;
 
-/** Threads drawn at once, when they are shown. */
-const MAX_THREADS = 60;
-
 export function ReplyNetwork({
   people,
   edges,
@@ -88,7 +133,7 @@ export function ReplyNetwork({
   const { resolvedTheme } = useTheme();
   const [unsupported, setUnsupported] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const [showThreads, setShowThreads] = useState(false);
+  const [layer, setLayer] = useState<Layer>("people");
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -106,16 +151,24 @@ export function ReplyNetwork({
     // legend, and every account is on the threads page.
     const connected = new Set(kept.flatMap((e) => [e.source, e.target]));
     const visiblePeople = people.filter((p) => connected.has(p.id));
-    // Threads are the discussions those people are actually in. Capped,
-    // because every thread at once is a second hairball on top of the first.
-    const visibleThreads = showThreads
-      ? threads
-          .filter((t) => t.participants.filter((id) => connected.has(id)).length >= 2)
-          .sort((a, b) => b.messages - a.messages)
-          .slice(0, MAX_THREADS)
-      : [];
-    return { edges: kept, people: visiblePeople, threads: visibleThreads };
-  }, [people, edges, threads, minReplies, filter, showThreads]);
+    // Every thread those people are in. Uncapped at the operator's direction:
+    // a cap silently answers "what is on this list" with "the top sixty".
+    const visibleThreads =
+      layer === "people"
+        ? []
+        : threads.filter((t) => t.participants.some((id) => connected.has(id)));
+    const visibleTopics =
+      layer === "topics"
+        ? [
+            ...new Map(
+              visibleThreads
+                .filter((t) => t.topic_id)
+                .map((t) => [t.topic_id!, t.topic_label ?? t.topic_id!]),
+            ),
+          ].map(([id, label]) => ({ id, label }))
+        : [];
+    return { edges: kept, people: visiblePeople, threads: visibleThreads, topics: visibleTopics };
+  }, [people, edges, threads, minReplies, filter, layer]);
 
   const focus: Focus | null = useMemo(() => {
     if (!focusKey) return null;
@@ -160,6 +213,7 @@ export function ReplyNetwork({
         maxCameraRatio: 10,
         stagePadding: 50,
         defaultEdgeColor: cssVar("--thread-line") || "#c3c2bb",
+        defaultDrawNodeHover: drawHover,
       });
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
@@ -288,10 +342,21 @@ export function ReplyNetwork({
         kind: "thread",
         // Squares, so a discussion never reads as a person.
         type: "square",
-        size: 3 + 12 * Math.sqrt(t.messages / maxThread),
+        size: 2 + 10 * Math.sqrt(t.messages / maxThread),
         weight: t.messages,
         x: Math.cos((index / Math.max(1, shown.threads.length)) * 2 * Math.PI) * 1.4,
         y: Math.sin((index / Math.max(1, shown.threads.length)) * 2 * Math.PI) * 1.4,
+      });
+    });
+    shown.topics.forEach((topic, index) => {
+      graph.addNode(`topic:${topic.id}`, {
+        label: topic.label,
+        kind: "topic",
+        type: "circle",
+        size: 9,
+        weight: Number.MAX_SAFE_INTEGER - index,
+        x: Math.cos((index / Math.max(1, shown.topics.length)) * 2 * Math.PI) * 2.2,
+        y: Math.sin((index / Math.max(1, shown.topics.length)) * 2 * Math.PI) * 2.2,
       });
     });
     for (const e of shown.edges) {
@@ -307,6 +372,11 @@ export function ReplyNetwork({
         if (!graph.hasNode(person)) continue;
         if (graph.hasEdge(`thread:${t.id}`, person)) continue;
         graph.addEdge(`thread:${t.id}`, person, { weight: 1, size: 0.4 });
+      }
+      if (t.topic_id && graph.hasNode(`topic:${t.topic_id}`)) {
+        if (!graph.hasEdge(`topic:${t.topic_id}`, `thread:${t.id}`)) {
+          graph.addEdge(`topic:${t.topic_id}`, `thread:${t.id}`, { weight: 1, size: 0.6 });
+        }
       }
     }
 
@@ -334,11 +404,16 @@ export function ReplyNetwork({
       BAND_ORDER.map((b) => [b, cssVar(BAND_META[b].token)]),
     ) as Record<Band, string>;
     const threadInk = cssVar("--thread-line") || "#8b8a85";
+    const topicInk = cssVar("--warn") || "#8a5a00";
     graph.forEachNode((key, attrs) =>
       graph.setNodeAttribute(
         key,
         "color",
-        attrs.kind === "thread" ? threadInk : colours[attrs.band as Band],
+        attrs.kind === "topic"
+          ? topicInk
+          : attrs.kind === "thread"
+            ? threadInk
+            : colours[attrs.band as Band],
       ),
     );
     renderer.setSetting("labelColor", { color: cssVar("--cy-ink") || "#1c1917" });
@@ -498,26 +573,32 @@ export function ReplyNetwork({
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setShowThreads((v) => !v)}
-          aria-pressed={showThreads}
-          className={
-            showThreads
-              ? "bg-primary text-primary-foreground rounded-md border px-3 py-1.5 text-xs"
-              : "text-muted-foreground hover:bg-accent rounded-md border px-3 py-1.5 text-xs"
-          }
-        >
-          {showThreads ? "Hide threads" : "Show threads"}
-        </button>
+        <div className="flex overflow-hidden rounded-md border" role="group" aria-label="Which tiers to draw">
+          {LAYERS.map((l) => (
+            <button
+              key={l.id}
+              onClick={() => setLayer(l.id)}
+              aria-pressed={layer === l.id}
+              className={
+                layer === l.id
+                  ? "bg-primary text-primary-foreground px-3 py-1.5 text-xs"
+                  : "text-muted-foreground hover:bg-accent px-3 py-1.5 text-xs"
+              }
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
         <span className="text-muted-foreground text-xs">
           {shown.people.length} of {people.length} people, {shown.edges.length} pairs
           {minReplies > 1 && " who answered each other more than once"}
-          {showThreads && `, ${shown.threads.length} threads`}
+          {shown.threads.length > 0 && `, ${shown.threads.length} threads`}
+          {shown.topics.length > 0 && `, ${shown.topics.length} topics`}
         </span>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
-        <span className="text-muted-foreground">Publication record</span>
+        <span className="text-muted-foreground">Contributor score</span>
         {BAND_ORDER.map((b) => (
           <span key={b} className="flex items-center gap-1.5" title={BAND_META[b].help}>
             <i
@@ -540,7 +621,7 @@ export function ReplyNetwork({
           <div className="flex flex-wrap items-baseline gap-x-3">
             <span className="text-sm font-semibold">{focus.person.name}</span>
             <span className="tnum text-muted-foreground text-xs">
-              publication record {focus.person.score}/100
+              contributor score {focus.person.score}/100
             </span>
           </div>
           <p className="text-muted-foreground tnum mt-1 text-xs">
@@ -556,15 +637,53 @@ export function ReplyNetwork({
             {focus.person.replies_received} received · {focus.person.lists.join(", ")}
             {focus.person.first_seen && ` · first posted ${focus.person.first_seen.slice(0, 10)}`}
           </p>
-          {threadsOf(focus.person.id).length > 0 && (
-            <p className="text-muted-foreground mt-2 text-xs">
-              <span className="text-foreground font-medium">In:</span>{" "}
-              {threadsOf(focus.person.id)
-                .slice(0, 4)
-                .map((t) => tidySubject(t.subject))
-                .join(" · ")}
-            </p>
-          )}
+          {(() => {
+            // A run-on list of subjects said nothing at a glance. What the
+            // operator asked for is which subjects, and how the exchanges in
+            // them were carried.
+            const own = threadsOf(focus.person.id);
+            if (own.length === 0) return null;
+            const topics = [
+              ...new Map(
+                own.filter((t) => t.topic_label).map((t) => [t.topic_id!, t.topic_label!]),
+              ).values(),
+            ];
+            const counts = { high: 0, medium: 0, low: 0 } as Record<Utility, number>;
+            for (const t of own) counts[t.utility]++;
+            return (
+              <div className="mt-2 text-xs">
+                <p className="text-muted-foreground">
+                  <span className="tnum text-foreground font-medium">{own.length}</span> thread
+                  {own.length === 1 ? "" : "s"}
+                  {topics.length > 0 && (
+                    <>
+                      {" across "}
+                      <span className="tnum text-foreground font-medium">{topics.length}</span>{" "}
+                      topic{topics.length === 1 ? "" : "s"}
+                    </>
+                  )}
+                  {" — "}
+                  {UTILITY_ORDER
+                    .filter((k) => counts[k] > 0)
+                    .map((k) => `${counts[k]} ${UTILITY_META[k].label}`)
+                    .join(", ")}
+                </p>
+                {topics.length > 0 && (
+                  <p className="text-muted-foreground mt-1">
+                    <span className="text-foreground font-medium">Topics:</span>{" "}
+                    {topics.slice(0, 5).join(" · ")}
+                    {topics.length > 5 && ` and ${topics.length - 5} more`}
+                  </p>
+                )}
+                <a
+                  className="text-primary mt-1 inline-block hover:underline"
+                  href={`/people/${focus.person.id}/`}
+                >
+                  Full profile →
+                </a>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -581,10 +700,21 @@ export function ReplyNetwork({
           <p className="text-muted-foreground tnum mt-1 text-xs">
             {focus.thread.messages} message{focus.thread.messages === 1 ? "" : "s"} ·{" "}
             {focus.thread.participants.length} participant
-            {focus.thread.participants.length === 1 ? "" : "s"} · {focus.thread.list_name}
-            {focus.thread.last_message_at &&
-              ` · last message ${focus.thread.last_message_at.slice(0, 10)}`}
+            {focus.thread.participants.length === 1 ? "" : "s"} ·{" "}
+            <span title={UTILITY_META[focus.thread.utility].help}>
+              utility {UTILITY_META[focus.thread.utility].label.toLowerCase()}
+            </span>
+            {" · "}
+            {Math.round(focus.thread.top_two_share * 100)}% from the busiest two
+            {focus.thread.quiet_for_days !== null &&
+              ` · quiet ${focus.thread.quiet_for_days} day${focus.thread.quiet_for_days === 1 ? "" : "s"}`}
           </p>
+          {focus.thread.topic_label && (
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              <span className="text-foreground font-medium">Topic:</span>{" "}
+              {focus.thread.topic_label}
+            </p>
+          )}
           <div className="mt-2">
             <span className="text-foreground text-xs font-medium">Who is in it</span>
             <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">

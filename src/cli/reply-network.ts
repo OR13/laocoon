@@ -30,7 +30,8 @@ import type { Event, MessageObserved, PrivateEvent, ReplyGraph } from "../schema
 import { JsonlEventStore } from "../store/jsonl-store.ts";
 import { assertPublishableArtifact } from "../site/publishable.ts";
 import { archiveMessageUrl } from "../lib/archive.ts";
-import { bandOf, recordScore, type RecordScore } from "../seed/record-score.ts";
+import { bandOf, contributorScore, type ContributorScore } from "../score/contributor.ts";
+import { utilityOf } from "../score/utility.ts";
 import { JsonlEventStore as PrivateStore } from "../store/jsonl-store.ts";
 import { ARTIFACTS_DIR, EVENTS_DIR, PRIVATE_DIR } from "../lib/paths.ts";
 
@@ -92,11 +93,11 @@ for await (const event of privateStore.read()) {
   const payload = event.payload as Fetched;
   records.set(payload.person_id, payload);
 }
-function scoreOf(senderId: string): RecordScore | null {
+function scoreOf(senderId: string): ContributorScore | null {
   const personId = personOf.get(senderId);
   if (personId == null) return null;
   const record = records.get(personId);
-  return record ? recordScore(record) : null;
+  return record ? contributorScore(record) : null;
 }
 const noRecord = new Set(
   seedDoc.unseeded.filter((u) => u.reason === "no_datatracker_record").map((u) => u.sender_id),
@@ -273,19 +274,83 @@ if (sortedDays.length > 0) {
  * question a shape in the same picture, and it is still a real network: an
  * edge means this account posted in this thread.
  */
+/**
+ * Which topic each thread was clustered into, if any.
+ *
+ * The operator needs topics to reason about the space: a thread is a
+ * conversation and a topic is a subject, and "what is this list arguing about"
+ * is a question about subjects.
+ */
+const topicOfThread = new Map<string, { id: string; label: string }>();
+for (const list of graph.coverage.lists) {
+  const path = join(ARTIFACTS_DIR, `topic-tree-${list}.json`);
+  if (!(await Bun.file(path).exists())) continue;
+  const tree = (await Bun.file(path).json()) as {
+    topics: { id: string; label: string | null; subjects: string[]; threads: string[] }[];
+  };
+  for (const topic of tree.topics) {
+    const label = topic.label ?? topic.subjects[0] ?? topic.id;
+    for (const id of topic.threads) topicOfThread.set(id, { id: topic.id, label });
+  }
+}
+
+/**
+ * The shape of an exchange.
+ *
+ * Not "health" — the operator was right that the word is wrong, because it
+ * implies a verdict on a discussion this system is in no position to give.
+ * These are three counts of who did the talking, and each says something the
+ * operator named:
+ *
+ *   participants   whether the list could follow along, or two people talked
+ *   top_two_share  what fraction of the messages the two busiest sent. A long
+ *                  thread where two accounts sent nearly all of it is the
+ *                  amplification shape, whoever or whatever is doing it.
+ *   quiet_for_days whether it resolved, stalled, or is still running. An
+ *                  ending is not a verdict either; a thread can go quiet
+ *                  because it was settled or because everyone gave up.
+ */
+const NOW = Date.parse(
+  graph.nodes.reduce((latest, n) => ((n.sent_at ?? "") > latest ? n.sent_at! : latest), ""),
+);
+
 const threadRows = graph.threads
   .map((t) => {
     const members = graph.nodes.filter((n) => n.thread_id === t.thread_id);
     const senders = [...new Set(members.map((n) => n.sender_id))];
     const scores = senders.map((id) => scoreOf(id)?.score ?? 0);
+    const perSender = new Map<string, number>();
+    for (const n of members) perSender.set(n.sender_id, (perSender.get(n.sender_id) ?? 0) + 1);
+    const topTwo = [...perSender.values()].sort((a, b) => b - a).slice(0, 2);
+    const last = t.last_message_at ? Date.parse(t.last_message_at) : null;
+    const topic = topicOfThread.get(t.thread_id) ?? null;
     return {
       id: t.thread_id,
       subject: t.subject,
       list_name: listOf.get(t.thread_id) ?? members[0]?.list_name ?? "",
+      topic_id: topic?.id ?? null,
+      topic_label: topic?.label ?? null,
       messages: members.length,
       participants: senders.map(slugFor),
-      /** Highest publication record among the people in it. A fact, not a verdict. */
-      top_record: scores.length ? Math.max(...scores) : 0,
+      /** Highest contributor score among the people in it. A fact, not a verdict. */
+      top_contributor: scores.length ? Math.max(...scores) : 0,
+      /** Share of the thread sent by its two busiest accounts. */
+      top_two_share: members.length
+        ? Number((topTwo.reduce((a, b) => a + b, 0) / members.length).toFixed(3))
+        : 0,
+      quiet_for_days:
+        last !== null && Number.isFinite(NOW) ? Math.round((NOW - last) / 86_400_000) : null,
+      ...(() => {
+        const verdict = utilityOf({
+          messages: members.length,
+          participants: senders.length,
+          top_two_share: members.length
+            ? topTwo.reduce((a, b) => a + b, 0) / members.length
+            : 0,
+          best_contributor: scores.length ? Math.max(...scores) : 0,
+        });
+        return { utility: verdict.utility, utility_reason: verdict.reason };
+      })(),
       started_at: t.started_at ?? null,
       last_message_at: t.last_message_at ?? null,
       href: archiveMessageUrl(t.thread_id, listOf.get(t.thread_id) ?? ""),
@@ -302,10 +367,11 @@ const artifact = {
   lists: graph.coverage.lists,
   reads_as:
     "Who replied to whom, from the From: headers and threading headers of posts " +
-    "to public IETF lists. The score is a summary of a person's published IETF " +
-    "record — RFCs, adopted drafts, roles — and is not a rating of their " +
-    "messages. The graph-position reputation this system computes is a " +
-    "different thing and stays local.",
+    "to public IETF lists. The Laocoon contributor score summarises a person's " +
+    "published IETF record — RFCs, adopted drafts, roles — and is not a rating " +
+    "of their messages. The Laocoon utility score describes the shape of a " +
+    "thread from three counts of who did the talking. The graph-position " +
+    "reputation this system computes is a different thing and stays local.",
   self_replies_dropped: selfReplies,
   daily: days,
   threads: threadRows,

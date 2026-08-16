@@ -55,7 +55,7 @@ export default async function OverviewPage() {
             Every figure derives from an event committed to the repository. Names and
             reply relationships are republished from public list posts; the publication
             record score is computed from the Datatracker and{" "}
-            <a className="text-primary underline" href="/methodology/#record-score">
+            <a className="text-primary underline" href="/methodology/#scores">
               defined in the methodology
             </a>
             .

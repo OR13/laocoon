@@ -160,79 +160,97 @@ export default async function MethodologyPage() {
         )}
       </Section>
 
-      <Section title="Publication record score" id="record-score">
+      <Section title="The two Laocoön scores" id="scores">
         <p>
-          Each account gets a score out of 100 summarising what the IETF&apos;s own records
-          say they have published. It is used to colour the network on the overview and to
-          band the daily traffic. It replaced a binary — holds community-conferred standing,
-          or does not — which sorted a mailing list into two classes of person and read as
-          a caste mark.
+          <strong>The Laocoön contributor score</strong> is 0–100 over what the IETF&apos;s own
+          records say an account has published. It replaced a binary — holds
+          community-conferred standing, or does not — which sorted a mailing list into two
+          classes of person and read as a caste mark.
         </p>
         <p>
           <strong>It is not a rating of anyone&apos;s messages</strong>, their judgement, or
-          their worth to a discussion. Every term is a count of something already published
-          under that person&apos;s name. A score of zero means no published IETF record,
-          which is the ordinary state of a new participant and of anyone who contributes
-          without filing documents. Nothing in the pipeline treats a low score as a reason
-          to discount a message, and no measure of message quality feeds into it.
+          their worth to a discussion. A score of zero means no published IETF record, which
+          is the ordinary state of a new participant and of anyone who contributes without
+          filing documents. Nothing in the pipeline treats a low score as a reason to
+          discount a message, and no measure of message content feeds into it.
         </p>
         <table className="mt-2 w-full text-sm">
           <thead>
             <tr className="border-b">
-              <th className="py-1.5 text-left font-semibold">Term</th>
-              <th className="py-1.5 text-right font-semibold">Points</th>
-              <th className="py-1.5 text-left font-semibold">Full at</th>
+              <th className="py-1.5 text-left font-semibold">Weighted unit</th>
+              <th className="py-1.5 text-right font-semibold">Points each</th>
             </tr>
           </thead>
           <tbody className="[&_td]:py-1.5">
-            <tr className="border-b">
-              <td>Published RFCs</td>
-              <td className="tnum text-right">40</td>
-              <td>25 RFCs</td>
-            </tr>
-            <tr className="border-b">
-              <td>Adopted working-group drafts (<code>draft-ietf-*</code>)</td>
-              <td className="tnum text-right">20</td>
-              <td>5 drafts</td>
-            </tr>
-            <tr className="border-b">
-              <td>Currently chairs a working group</td>
-              <td className="tnum text-right">25</td>
-              <td>—</td>
-            </tr>
-            <tr className="border-b">
-              <td>Has chaired one</td>
-              <td className="tnum text-right">12</td>
-              <td>—</td>
-            </tr>
-            <tr>
-              <td>Area Director, IAB or IESG</td>
-              <td className="tnum text-right">15</td>
-              <td>—</td>
-            </tr>
+            <tr className="border-b"><td>Published RFC</td><td className="tnum text-right">1</td></tr>
+            <tr className="border-b"><td>Adopted working-group draft (<code>draft-ietf-*</code>)</td><td className="tnum text-right">1</td></tr>
+            <tr className="border-b"><td>Currently chairs a working group</td><td className="tnum text-right">5</td></tr>
+            <tr className="border-b"><td>Has chaired one</td><td className="tnum text-right">2</td></tr>
+            <tr><td>Area Director, IAB or IESG</td><td className="tnum text-right">4</td></tr>
           </tbody>
         </table>
         <p className="pt-1">
-          The two counted terms <strong>saturate logarithmically</strong>: the difference
-          between nought and three RFCs says far more than the difference between sixty and
-          eighty-three, and without saturation the handful of very prolific authors would
-          flatten everyone else against zero. Chairing counts once at its highest level —
-          a current chair who also chaired before has one responsibility, not two.
+          Those units are then put through a <strong>logistic curve</strong>, at the
+          operator&apos;s direction:{" "}
+          <code>score = 100 · (L(raw) − L(0)) / (1 − L(0))</code> where{" "}
+          <code>L(x) = 1 / (1 + e^(−0.22(x − 8)))</code>. A linear or saturating sum spends
+          most of its range separating a very prolific author from an extremely prolific
+          one, which is the least interesting comparison on the list. An S-curve spends it
+          in the middle, where the difference between two documents and fifteen actually
+          distinguishes people: 1 unit scores 3, 3 units 12, 8 units 41, 12 units 66, 20
+          units 92. The <code>− L(0)</code> term anchors it — without it an empty record
+          scores about 12, and having filed nothing would read as a low grade rather than
+          as an absence.
         </p>
         <p>
-          The constants are <strong>fixed reference points, not percentiles of this
-          corpus</strong>. Deriving them from the crawl would move the scale every time it
-          grew and make two runs incomparable, which is the same
-          cannot-produce-a-negative-result failure that removed the health verdict. They
-          are stated here so each can be argued with on its own, and the score always
-          breaks back down into its parts on screen.
+          Chairing counts once at its highest level: a current chair who also chaired before
+          holds one responsibility, not two. An individual submission no working group
+          adopted does not count, on the same reasoning as the seed rule — it is an act by
+          the author rather than one the community took. The constants are fixed reference
+          points rather than percentiles of this corpus, because derived from the crawl the
+          scale would move every time it grew and two runs would not be comparable.
+        </p>
+
+        <h3 className="text-foreground mt-6 mb-1 font-semibold">Laocoön utility score</h3>
+        <p>
+          Per thread, and <strong>three levels rather than a number</strong>: low, medium,
+          high. A continuous score here would invite an argument about weights that cannot
+          be won; a level built from a conjunction of thresholds can be disagreed with one
+          condition at a time, and every input is shown beside it.
         </p>
         <p>
-          Bands are round numbers on the scale — 0, 1–29, 30–59, 60–100 — and are named for
-          a quantity of published work rather than for a kind of person. An individual
-          submission that no working group adopted does not count, on the same reasoning as
-          the seed rule: it is an act by the author rather than one the community took.
+          It was going to be called health. That word is wrong: it implies a verdict on a
+          discussion, and none of these inputs can support one. What they describe is who
+          did the talking.
         </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <strong>High</strong> — six messages or more, four or more participants, under
+            70% of the messages from the busiest two accounts, and at least one participant
+            with a contributor score of 35 or more.
+          </li>
+          <li>
+            <strong>Low</strong> — either a thread of six or more that two or three accounts
+            carried at 80% or above, or a short exchange between two accounts with no
+            published record.
+          </li>
+          <li>
+            <strong>Medium</strong> — meets some of the conditions for high, or is too short
+            to say.
+          </li>
+        </ul>
+        <p>
+          <strong>A low is a prompt to read the thread, not a verdict on it.</strong> Two
+          experts working through a detail produce exactly the shape two amplifying accounts
+          produce, and this measures the shape. There is a test asserting the two score
+          identically, because the day they stop doing so is the day this has quietly become
+          a provenance detector.
+        </p>
+        {provenance && (
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 pt-1">
+            <dt>Seed rule version</dt><dd>{provenance.seed_rule_version}</dd>
+          </dl>
+        )}
       </Section>
 
       <Section title="Topics">
