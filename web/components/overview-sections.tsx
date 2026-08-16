@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { RANGES } from "@/components/time-range";
-import { Section, ThreadList } from "@/components/sections";
+import { Section } from "@/components/sections";
 import { ScoreTrend } from "@/components/score-trend";
 import type { ListedThread } from "@/lib/threads";
 import dynamic from "next/dynamic";
@@ -78,11 +78,6 @@ export function OverviewSections({
     return list === "all" ? windowed : windowed.filter((t) => t.list_name === list);
   }, [threads, days, list]);
 
-  const busiest = useMemo(
-    () => [...visible].sort((a, b) => b.messages - a.messages || b.participants - a.participants),
-    [visible],
-  );
-
   const totalMessages = visible.reduce((n, t) => n + t.messages, 0);
 
   return (
@@ -128,13 +123,12 @@ export function OverviewSections({
 
       <Section id="network" question="Who is talking to whom">
         <p className="text-muted-foreground mb-4 max-w-[76ch] text-sm">
-          Everyone who has posted to either list, joined by who answered whom. Colour is
-          each account&apos;s Laocoön contributor score — published RFCs, adopted drafts and
-          roles on a 0-100 curve, and{" "}
+          Everyone who has posted to either list, every thread and every topic. Click
+          anything to see what it is attached to.{" "}
           <a className="text-primary underline" href="/methodology/#scores">
-            defined here
+            How the scores work
           </a>
-          . Drag a node to pull it out of the pile.
+          .
         </p>
         <ReplyNetwork
           people={people}
@@ -145,20 +139,42 @@ export function OverviewSections({
         />
       </Section>
 
-      <Section id="threads" question="Busiest threads">
-        <p className="text-muted-foreground mb-4 max-w-[76ch] text-sm">
-          The most active discussions in the window, with a link into the archive.
-        </p>
-        <ThreadList threads={busiest} empty="No threads in this window." limit={10} />
+      <Section id="ways-in" question="Where to start">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            {
+              href: "/lists/",
+              title: "Mailing lists",
+              body: "The two corpora, with their threads and their people under them.",
+            },
+            {
+              href: "/people/",
+              title: "People",
+              body: "Everyone who has posted, and what they have published.",
+            },
+            {
+              href: "/topics/",
+              title: "Topics",
+              body: "Clusters of threads about the same thing.",
+            },
+          ].map((card) => (
+            <a
+              key={card.href}
+              href={card.href}
+              className="hover:border-primary hover:bg-accent/40 rounded-lg border p-4 transition-colors"
+            >
+              <span className="block text-sm font-semibold">{card.title}</span>
+              <span className="text-muted-foreground mt-1 block text-xs">{card.body}</span>
+            </a>
+          ))}
+        </div>
       </Section>
 
       {daily.length > 0 && (
-        <Section id="trend" question="Messages per day, by both Laocoön scores">
+        <Section id="trend" question="Messages per day">
           <p className="text-muted-foreground mb-4 max-w-[80ch] text-sm">
-            One row per list, because agent2agent carries about twelve times the traffic and
-            pooling them made the smaller list a rounding error. The left column is who sent
-            each message — the sender&apos;s contributor score — and the right is what they
-            sent into: the utility score of the thread it landed in.
+            Left: the contributor score of whoever sent each message. Right: the utility
+            score of the thread it landed in.
           </p>
           <ScoreTrend daily={daily} days={days} />
         </Section>

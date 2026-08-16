@@ -297,6 +297,36 @@ export default async function MethodologyPage() {
         </ul>
       </Section>
 
+      <Section title="Whether any of it predicts anything" id="accuracy">
+        <p>
+          Every measure here is scored against the same standard: rank the threads at time{" "}
+          <em>T</em>, then check at <em>T+h</em> whether the engagement it ranked highest
+          actually arrived. The baseline is raw reply volume — no model, no seed. The
+          question is never &ldquo;does this predict anything&rdquo; but &ldquo;does it
+          predict better than counting messages&rdquo;.
+        </p>
+        <p>
+          <strong>Mostly it does not, and that is reported rather than buried.</strong> On
+          agent2agent the volume baseline wins at +0.466 and nothing has beaten it. On
+          agentproto the baseline runs <em>negative</em> at −0.236 while seeded
+          participation reaches +0.544. Two lists, opposite answers, 106 messages against
+          1,233 — which is why nothing on this site is presented as a forecast.
+        </p>
+        <p>
+          Three independent measures of what a message contains — concreteness, novelty and
+          thread-specificity — were each tested this way and none of them predicts whether
+          an established account replies. Only asking a question does, and only weakly.
+          They are kept as descriptions of what is being written, which is a different
+          claim from what will happen next.
+        </p>
+        <p>
+          Origins roll daily, so successive windows overlap and the runs are correlated;
+          they are not independent trials. 761 of the recorded evaluations predate the list
+          being written onto the event, and since events here are immutable those runs are
+          excluded rather than attributed to a guess.
+        </p>
+      </Section>
+
       <Section title="Corrections">
         <p>
           Every figure derives from a JSON event committed to the repository. A dispute is

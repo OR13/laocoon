@@ -95,6 +95,7 @@ export function ReplyNetwork({
   const place = useRef<() => void>(() => {});
   const { resolvedTheme } = useTheme();
   const [unsupported, setUnsupported] = useState(false);
+  const [laying, setLaying] = useState(true);
   const [levels, setLevels] = useState<Level[]>([...LEVELS]);
   const [pickedPeople, setPickedPeople] = useState<string[]>([]);
   const [pickedThreads, setPickedThreads] = useState<string[]>([]);
@@ -265,6 +266,12 @@ export function ReplyNetwork({
     const graph = graphRef.current;
     const renderer = sigmaRef.current;
     if (!graph || !renderer) return;
+    // 600 force iterations over 639 nodes blocks the main thread for a couple
+    // of seconds. Yielding one frame first lets the spinner actually paint —
+    // without it the flag flips to true and back inside the same frame and the
+    // reader sees a frozen page instead.
+    setLaying(true);
+    const frame = requestAnimationFrame(() => {
     graph.clear();
 
     const maxMessages = shown.people.reduce((m, p) => Math.max(m, p.messages), 1);
@@ -334,6 +341,9 @@ export function ReplyNetwork({
     });
     renderer.refresh();
     place.current();
+      setLaying(false);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [shown]);
 
   /** Colour, and the wash everything outside a selection falls to. */
@@ -509,7 +519,7 @@ export function ReplyNetwork({
     <div>
       <div className="mb-3 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-muted-foreground text-xs">Contributor score</span>
+          <span className="text-muted-foreground text-xs">Show contributor score</span>
           <div
             className="flex overflow-hidden rounded-md border"
             role="group"
@@ -568,6 +578,17 @@ export function ReplyNetwork({
 
       <div className="relative">
         <div ref={boxRef} style={{ height }} className="bg-card w-full rounded-lg border" />
+        {laying && (
+          <div className="bg-card/80 absolute inset-0 flex items-center justify-center rounded-lg">
+            <span className="text-muted-foreground flex items-center gap-2 text-sm">
+              <i
+                aria-hidden
+                className="border-muted-foreground/30 border-t-primary inline-block size-4 animate-spin rounded-full border-2"
+              />
+              Laying out {shown.people.length + shown.threads.length + shown.topics.length} nodes…
+            </span>
+          </div>
+        )}
         <button
           type="button"
           onClick={reset}
@@ -590,17 +611,9 @@ export function ReplyNetwork({
         <span className="flex items-center gap-1.5">
           <i className="bg-muted-foreground inline-block size-2.5 rotate-45 rounded-[1px]" /> topic
         </span>
-        <span className="text-muted-foreground">Colour is the score:</span>
-        {LEVELS.map((l) => (
-          <span key={l} className="flex items-center gap-1.5">
-            <i
-              className="inline-block size-2.5 rounded-full"
-              style={{ background: `var(${LEVEL_META[l].token})` }}
-            />
-            <span className="text-muted-foreground">{LEVEL_META[l].label}</span>
-          </span>
-        ))}
-        <span className="text-muted-foreground ml-auto">size is messages</span>
+        <span className="text-muted-foreground ml-auto">
+          colour is the score, size is messages
+        </span>
       </div>
 
       {detail && (
@@ -698,7 +711,7 @@ export function ReplyNetwork({
             ]
               .filter(Boolean)
               .join(" · ") || "nothing in the current filter"}
-            . They are lifted in the picture; everything else is washed back.
+            .
           </p>
         </div>
       )}

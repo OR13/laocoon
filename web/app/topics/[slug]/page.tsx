@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { ExperimentalBanner, PUBLIC_NAV, SiteShell } from "@/components/site-shell";
 import { coverageLine, loadPublic } from "@/lib/data";
 import { tidySubject } from "@/lib/graph-model";
+import { plural } from "@/components/entity";
 import { contributorLevel, LEVEL_META, LEVELS, UTILITY_HELP } from "@/lib/scores";
 
 /**
@@ -107,8 +108,8 @@ export default async function TopicPage({ params }: { params: Promise<{ slug: st
                   {tidySubject(t.subject)} ↗
                 </a>
                 <div className="text-muted-foreground tnum mt-0.5 text-xs">
-                  utility {LEVEL_META[t.utility].label.toLowerCase()} · {t.messages} messages ·{" "}
-                  {t.participants.length} participants ·{" "}
+                  utility {LEVEL_META[t.utility].label.toLowerCase()} · {plural(t.messages, "message")} ·{" "}
+                  {plural(t.participants.length, "participant")} ·{" "}
                   {Math.round(t.top_two_share * 100)}% from the busiest two
                   {t.quiet_for_days !== null && ` · quiet ${t.quiet_for_days}d`}
                 </div>

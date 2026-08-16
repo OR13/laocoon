@@ -30,26 +30,41 @@ export function ScoreTrend({ daily, days }: { daily: DayRow[]; days: number }) {
     return daily.filter((d) => keep.has(d.day));
   }, [daily, days]);
 
-  // One shared y-scale per column, so the two lists are comparable rather than
-  // each filling its own panel and looking equally busy.
-  const peak = useMemo(() => {
-    const totals = (key: "contributor" | "utility") =>
-      windowed.map((d) => LEVELS.reduce((n, l) => n + (d[key][l] ?? 0), 0));
-    return {
-      contributor: Math.max(1, ...totals("contributor")),
-      utility: Math.max(1, ...totals("utility")),
-    };
-  }, [windowed]);
+  /**
+   * One y-scale per list, not one across all four panels.
+   *
+   * Sharing a scale between the lists made the smaller one a flat line against
+   * the larger one's peak — technically honest and unreadable, which is not a
+   * trade worth making. Each row now has its own scale so the shape of a
+   * list's week is visible, the two columns within a row stay directly
+   * comparable because they count the same messages, and the peak is printed
+   * on the row so nobody reads across rows by accident.
+   */
+  const peakOf = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const list of lists) {
+      const rows = windowed.filter((d) => d.list_name === list);
+      const totals = rows.flatMap((d) =>
+        (["contributor", "utility"] as const).map((k) =>
+          LEVELS.reduce((n, l) => n + (d[k][l] ?? 0), 0),
+        ),
+      );
+      out.set(list, Math.max(1, ...totals));
+    }
+    return out;
+  }, [windowed, lists]);
 
   const panel = (list: string, key: "contributor" | "utility") => {
     const rows = windowed
       .filter((d) => d.list_name === list)
       .map((d) => ({ day: d.day.slice(5), ...d[key] }));
+    const peak = peakOf.get(list) ?? 1;
     return (
       <div key={`${list}-${key}`}>
         <p className="text-muted-foreground mb-1 text-xs">
           <span className="text-foreground font-medium">{list}</span> ·{" "}
           {key === "contributor" ? "who sent it" : "what they sent into"}
+          <span className="tnum ml-1.5 opacity-70">peak {peak}/day</span>
         </p>
         <div className="h-[150px] w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -61,7 +76,7 @@ export function ScoreTrend({ daily, days }: { daily: DayRow[]; days: number }) {
                 axisLine={false}
                 width={26}
                 allowDecimals={false}
-                domain={[0, peak[key]]}
+                domain={[0, peak]}
               />
               <Tooltip />
               {/* Low at the bottom: it is the biggest band and a stack reads
@@ -105,8 +120,7 @@ export function ScoreTrend({ daily, days }: { daily: DayRow[]; days: number }) {
           </span>
         ))}
         <span className="text-muted-foreground ml-auto">
-          left column is the sender&apos;s contributor score, right is the thread&apos;s utility
-          score · both columns share a y-scale across the lists
+          each list has its own y-scale — compare across a row, not down a column
         </span>
       </div>
     </div>

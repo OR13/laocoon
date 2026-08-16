@@ -12,7 +12,9 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ARTIFACTS_DIR, EVENTS_DIR, IS_PRIVATE_BUILD, PRIVATE_DIR, repoPath } from "./paths";
-import type { DayRow, NetworkEdge, NetworkPerson, NetworkThread, NetworkTopic } from "./scores";
+import type {
+  DayRow, MailingList, NetworkEdge, NetworkPerson, NetworkThread, NetworkTopic,
+} from "./scores";
 
 export const PUBLISHABLE_EVENT_TYPES = [
   "ThreadMeasured",
@@ -318,6 +320,7 @@ export interface ReplyNetwork {
   daily: DayRow[];
   // The shapes live in lib/scores.ts. Declaring them a second time here is how
   // the page and the artifact drifted apart the first time.
+  mailing_lists: MailingList[];
   topics: NetworkTopic[];
   threads: NetworkThread[];
   nodes: NetworkPerson[];

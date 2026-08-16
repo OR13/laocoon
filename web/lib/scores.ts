@@ -75,6 +75,8 @@ export interface NetworkEdge {
 
 export interface NetworkThread {
   id: string;
+  /** URL-safe: the archive token, not the Message-ID. */
+  slug: string;
   subject: string;
   list_name: string;
   topic_id: string | null;
@@ -91,6 +93,19 @@ export interface NetworkThread {
   started_at: string | null;
   last_message_at: string | null;
   href: string;
+}
+
+export interface MailingList {
+  name: string;
+  threads: number;
+  messages: number;
+  participants: number;
+  topics: number;
+  utility: Record<Level, number>;
+  contributor: Record<Level, number>;
+  first_message_at: string | null;
+  last_message_at: string | null;
+  archive_url: string;
 }
 
 /** One day, one list, counted two ways. */

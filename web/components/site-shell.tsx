@@ -77,10 +77,19 @@ export function Banner({
   );
 }
 
+/**
+ * Four resources and the reasoning behind them.
+ *
+ * The old nav had a Threads table and an Accuracy page, both of which were
+ * destinations rather than ways in. Everything is now reachable from a mailing
+ * list, a person or a topic, and the validation that lived on Accuracy sits in
+ * Methodology, next to the measures it validates.
+ */
 export const PUBLIC_NAV = [
   { href: "/", label: "Overview" },
-  { href: "/threads/", label: "Threads" },
-  { href: "/accuracy/", label: "Accuracy" },
+  { href: "/lists/", label: "Mailing lists" },
+  { href: "/people/", label: "People" },
+  { href: "/topics/", label: "Topics" },
   { href: "/methodology/", label: "Methodology" },
 ];
 

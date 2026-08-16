@@ -29,7 +29,7 @@ import { join } from "node:path";
 import type { Event, MessageObserved, PrivateEvent, ReplyGraph } from "../schema/generated.ts";
 import { JsonlEventStore } from "../store/jsonl-store.ts";
 import { assertPublishableArtifact } from "../site/publishable.ts";
-import { archiveMessageUrl } from "../lib/archive.ts";
+import { archiveListUrl, archiveMessageUrl, archiveToken } from "../lib/archive.ts";
 import { contributorScore, type ContributorScore } from "../score/contributor.ts";
 import { utilityOf } from "../score/utility.ts";
 import { JsonlEventStore as PrivateStore } from "../store/jsonl-store.ts";
@@ -300,6 +300,9 @@ const threadRows = graph.threads
     const topic = topicOfThread.get(t.thread_id) ?? null;
     return {
       id: t.thread_id,
+      // The archive token: already URL-safe, already stable, already derived
+      // from this thread. A Message-ID cannot go in a path.
+      slug: archiveToken(t.thread_id, listOf.get(t.thread_id) ?? ""),
       subject: t.subject,
       list_name: listOf.get(t.thread_id) ?? members[0]?.list_name ?? "",
       topic_id: topic?.id ?? null,
@@ -410,6 +413,33 @@ if (allDays.length > 0) {
   }
 }
 
+/** One row per mailing list: the top of the hierarchy the pages hang off. */
+const listRows = graph.coverage.lists.map((name) => {
+  const own = threadRows.filter((t) => t.list_name === name);
+  const participants = [...new Set(own.flatMap((t) => t.participants))];
+  const utility = { high: 0, medium: 0, low: 0 } as Record<string, number>;
+  for (const t of own) utility[t.utility] = (utility[t.utility] ?? 0) + 1;
+  const contributor = { high: 0, medium: 0, low: 0 } as Record<string, number>;
+  for (const id of participants) {
+    const key = levelOfScore(nodes.find((n) => n.id === id)?.score ?? 0);
+    contributor[key] = (contributor[key] ?? 0) + 1;
+  }
+  const starts = own.map((t) => t.started_at).filter(Boolean) as string[];
+  const ends = own.map((t) => t.last_message_at).filter(Boolean) as string[];
+  return {
+    name,
+    threads: own.length,
+    messages: own.reduce((n, t) => n + t.messages, 0),
+    participants: participants.length,
+    topics: [...new Set(own.map((t) => t.topic_id).filter(Boolean))].length,
+    utility,
+    contributor,
+    first_message_at: starts.length ? starts.sort()[0]! : null,
+    last_message_at: ends.length ? ends.sort().at(-1)! : null,
+    archive_url: archiveListUrl(name),
+  };
+});
+
 const artifact = {
   schema_version: "1.0.0",
   derived: true,
@@ -426,6 +456,7 @@ const artifact = {
     "reputation this system computes is a different thing and stays local.",
   self_replies_dropped: selfReplies,
   daily: days,
+  mailing_lists: listRows,
   topics: topicRows,
   threads: threadRows,
   nodes,
