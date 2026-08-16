@@ -1,26 +1,26 @@
 {
-  "cycle": "2026-08-16-network",
+  "cycle": "2026-08-16-record",
   "pending": true,
-  "title": "One picture: who replies to whom",
+  "title": "Publication record score, and a graph you can pull apart",
   "summary": "",
   "focus": [
     {
       "id": "network",
       "target": "[data-review='network']",
-      "title": "81 people, 120 pairs who answered each other more than once",
-      "ask": "The graph is back, as the reply network among people — the form a node-link diagram earns, since an edge here is a real relationship. Names are on it. Dark blue holds standing, light blue has a Datatracker record, grey has none. Is this the one picture, or is it still not the thing you need to see?"
+      "title": "Colour is now a score out of 100, not a binary",
+      "ask": "Standing is gone. Each account is scored on what it has published — 40 points of RFCs, 20 of adopted drafts, 25 for chairing, 15 for AD/IAB/IESG, the counted terms saturating. Filters for the Datatracker and for RFC counts are above the legend, and nodes drag. Does the formula match how you would weigh a record?"
     },
     {
       "id": "network",
       "target": "[data-review='network']",
-      "title": "The three busiest accounts hold no standing",
-      "ask": "Iman Schrock (110 messages), Chris Hood (71) and Muhammad Usama Sardar (41) all resolve to a Datatracker person but match no standing clause. Adrian Farrel at 28 is the first with standing. Does that match how the list feels to read?"
+      "title": "Three bugs the graph was hiding",
+      "ask": "It was rendering 304px narrower than its container and jumping 152px the first time you touched it; hovering moved the whole picture; and dragging latched but never moved anything because sigma stops mousemove propagation on the document. All three are fixed and tested. Does it feel right to handle now?"
     },
     {
-      "id": "share",
-      "target": "[data-review='share']",
-      "title": "444 of 603 pairs replied to each other exactly once",
-      "ask": "Drawing every one of those put 204 people in a single unreadable disc, so the default shows only pairs who answered each other twice or more. Is a repeated exchange the right definition of a relationship here, or does one reply already count?"
+      "id": "trend",
+      "target": "[data-review='trend']",
+      "title": "897 of 1,338 messages come from accounts with no published record",
+      "ask": "The trend is messages per day stacked by the sender's score band, replacing the standing/new framing you called offensive. Same unit in every band, so the height is the traffic and the composition is who produced it. Is this the comparison you wanted?"
     }
   ]
 }

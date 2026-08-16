@@ -134,7 +134,6 @@ export function ThreadList({
               <div className="text-muted-foreground tnum mt-0.5 text-xs">
                 {t.messages} message{t.messages === 1 ? "" : "s"} · {t.participants} participant
                 {t.participants === 1 ? "" : "s"}
-                {t.with_standing > 0 && ` · ${t.with_standing} with standing`}
                 {t.last_message_at && ` · ${t.last_message_at.slice(0, 10)}`}
                 <span className="ml-1.5 tracking-wide uppercase opacity-70">{t.list_name}</span>
               </div>

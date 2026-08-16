@@ -32,12 +32,18 @@ import { useTheme } from "next-themes";
 const cssVar = (n: string) =>
   getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-export type Standing = "standing" | "record" | "no_record";
+export type Band = "none" | "some" | "established" | "extensive";
 
 export interface NetworkPerson {
   id: string;
   name: string;
-  standing: Standing;
+  /** 0-100 from published RFCs, adopted drafts and IETF roles. */
+  score: number;
+  band: Band;
+  rfcs: number;
+  adopted_drafts: number;
+  chairs_now: boolean;
+  in_datatracker: boolean;
   messages: number;
   replies_sent: number;
   replies_received: number;
@@ -50,26 +56,40 @@ export interface NetworkEdge {
   replies: number;
 }
 
-export const STANDING_META: Record<Standing, { label: string; token: string; help: string }> = {
-  standing: {
-    label: "Holds community-conferred standing",
-    token: "--eng-answering",
-    help: "A working group chair, area director, IAB or IESG member, RFC author, or author of an adopted draft.",
-  },
-  record: {
-    label: "Has an IETF record",
-    token: "--eng-present",
-    help: "Resolves to a person in the Datatracker, without matching a standing clause.",
-  },
-  no_record: {
-    label: "No Datatracker record",
+/**
+ * Bands of published record. Named for a quantity of work, never for a kind of
+ * person — the binary these replace read as a caste mark, which is the whole
+ * reason the score exists.
+ *
+ * Sequential, because the thing encoded is a magnitude: one hue getting
+ * darker, with a neutral for the zero that is not a low value but an absence.
+ */
+export const BAND_META: Record<Band, { label: string; token: string; help: string }> = {
+  extensive: { label: "60–100", token: "--seq-700", help: "Extensive published record." },
+  established: { label: "30–59", token: "--seq-400", help: "Established published record." },
+  some: { label: "1–29", token: "--seq-250", help: "Some published work." },
+  none: {
+    label: "0",
     token: "--eng-none",
     help:
-      "The address resolves to nobody in the IETF's own records. That includes anyone who " +
-      "has simply never filed anything, so it is a fact about a lookup and not an inference.",
+      "Nothing published under this address in the Datatracker. That is the ordinary " +
+      "state of a new participant and of anyone who contributes without filing documents.",
   },
 };
-export const STANDING_ORDER: Standing[] = ["standing", "record", "no_record"];
+export const BAND_ORDER: Band[] = ["extensive", "established", "some", "none"];
+
+/** What the filter chips offer. Each is one lookup, not a judgement. */
+export const FILTERS = [
+  { id: "all", label: "Everyone", test: () => true },
+  {
+    id: "datatracker",
+    label: "In the Datatracker",
+    test: (p: NetworkPerson) => p.in_datatracker,
+  },
+  { id: "rfc", label: "Has an RFC", test: (p: NetworkPerson) => p.rfcs >= 1 },
+  { id: "rfcs", label: "3 or more RFCs", test: (p: NetworkPerson) => p.rfcs >= 3 },
+] as const;
+export type FilterId = (typeof FILTERS)[number]["id"];
 
 /** How many names may be drawn at once, before collision pruning. */
 const LABEL_CANDIDATES = 40;
@@ -97,6 +117,7 @@ export function ReplyNetwork({
   height?: number;
 }) {
   const [minReplies, setMinReplies] = useState(DEFAULT_MIN_REPLIES);
+  const [filter, setFilter] = useState<FilterId>("all");
   const boxRef = useRef<HTMLDivElement>(null);
   const sigmaRef = useRef<Sigma | null>(null);
   const graphRef = useRef<Graph | null>(null);
@@ -110,13 +131,17 @@ export function ReplyNetwork({
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
 
   const shown = useMemo(() => {
-    const kept = edges.filter((e) => e.replies >= minReplies);
+    const test = FILTERS.find((f) => f.id === filter)!.test;
+    const eligible = new Set(people.filter(test).map((p) => p.id));
+    const kept = edges.filter(
+      (e) => e.replies >= minReplies && eligible.has(e.source) && eligible.has(e.target),
+    );
     // Only people the filter leaves connected. A rim of isolated dots is not
     // information the picture is trying to carry — the counts are in the
     // legend, and every account is on the threads page.
     const connected = new Set(kept.flatMap((e) => [e.source, e.target]));
     return { edges: kept, people: people.filter((p) => connected.has(p.id)) };
-  }, [people, edges, minReplies]);
+  }, [people, edges, minReplies, filter]);
 
   useEffect(() => {
     if (!boxRef.current) return;
@@ -136,7 +161,7 @@ export function ReplyNetwork({
     for (const p of shown.people) {
       graph.addNode(p.id, {
         label: p.name,
-        standing: p.standing,
+        band: p.band,
         size: 3 + 17 * Math.sqrt(p.messages / maxMessages),
         messages: p.messages,
         // Seeded on a circle rather than at random, so the force pass starts
@@ -198,7 +223,92 @@ export function ReplyNetwork({
     renderer.on("enterNode", ({ node }) => setHovered(node));
     renderer.on("leaveNode", () => setHovered(null));
 
+    // Dragging, driven by sigma's own hit test rather than by its `downNode`
+    // event. That event never fired here — `moveBody` and `upStage` did, so
+    // the captor was live and the node simply was not being matched at
+    // mousedown — while `getNodeAtPosition` returns the right node for the
+    // same coordinates. Going straight to the hit test skips the question.
+    const container = renderer.getContainer() as HTMLElement;
+
+    // sigma measures the container once and does not watch it. The review
+    // panel adds 19rem of body padding, so the graph was initialising at
+    // 1096px, and the moment anything triggered a resize check it jumped 152px
+    // — exactly half the 304px the panel occupies. Every position a reader
+    // clicked before that jump was measured against the wrong viewport.
+    const observer = new ResizeObserver(() => renderer.refresh());
+    observer.observe(container);
+
+    let dragging: string | null = null;
+
+    const relative = (event: MouseEvent) => {
+      const box = container.getBoundingClientRect();
+      return { x: event.clientX - box.left, y: event.clientY - box.top };
+    };
+
+    /**
+     * Nearest node under the pointer, computed from display positions.
+     *
+     * Not sigma's `getNodeAtPosition`: that returns the right node when called
+     * cold and null when called from inside a mousedown while a node is
+     * hovered, because the hover handler refreshes and reindexes underneath
+     * it. A hit test is a distance comparison, so doing it here removes the
+     * dependency on when the index was last built.
+     */
+    const nodeUnder = (point: { x: number; y: number }): string | null => {
+      let best: string | null = null;
+      let bestDistance = Infinity;
+      graph.forEachNode((key) => {
+        const display = renderer.getNodeDisplayData(key);
+        if (!display) return;
+        const at = renderer.framedGraphToViewport(display);
+        const radius = renderer.scaleSize
+          ? renderer.scaleSize(display.size)
+          : (display.size as number);
+        const distance = Math.hypot(at.x - point.x, at.y - point.y);
+        if (distance <= Math.max(radius, 4) && distance < bestDistance) {
+          bestDistance = distance;
+          best = key;
+        }
+      });
+      return best;
+    };
+
+    const onDown = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      const hit = nodeUnder(relative(event));
+      if (!hit) return;
+      dragging = hit;
+      graph.setNodeAttribute(hit, "highlighted", true);
+      // Otherwise the canvas pans under the node being moved.
+      renderer.getCamera().disable();
+      event.preventDefault();
+    };
+    const onMove = (event: MouseEvent) => {
+      if (!dragging) return;
+      const point = renderer.viewportToGraph(relative(event));
+      graph.setNodeAttribute(dragging, "x", point.x);
+      graph.setNodeAttribute(dragging, "y", point.y);
+      event.preventDefault();
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      graph.removeNodeAttribute(dragging, "highlighted");
+      dragging = null;
+      renderer.getCamera().enable();
+    };
+    // Capture phase, on the document. sigma binds its own `mousemove` and
+    // `mouseup` on the document at construction and stops propagation while it
+    // is panning, so a listener on window downstream of it never ran — the
+    // drag latched on mousedown and then nothing moved.
+    container.addEventListener("mousedown", onDown, { capture: true });
+    document.addEventListener("mousemove", onMove, { capture: true });
+    document.addEventListener("mouseup", onUp, { capture: true });
+
     return () => {
+      observer.disconnect();
+      container.removeEventListener("mousedown", onDown, { capture: true });
+      document.removeEventListener("mousemove", onMove, { capture: true });
+      document.removeEventListener("mouseup", onUp, { capture: true });
       renderer.kill();
       sigmaRef.current = null;
       graphRef.current = null;
@@ -211,10 +321,10 @@ export function ReplyNetwork({
     const renderer = sigmaRef.current;
     if (!graph || !renderer) return;
     const colours = Object.fromEntries(
-      STANDING_ORDER.map((s) => [s, cssVar(STANDING_META[s].token)]),
-    ) as Record<Standing, string>;
+      BAND_ORDER.map((b) => [b, cssVar(BAND_META[b].token)]),
+    ) as Record<Band, string>;
     graph.forEachNode((key, attrs) =>
-      graph.setNodeAttribute(key, "color", colours[attrs.standing as Standing]),
+      graph.setNodeAttribute(key, "color", colours[attrs.band as Band]),
     );
     renderer.setSetting("labelColor", { color: cssVar("--cy-ink") || "#1c1917" });
     renderer.setSetting("defaultEdgeColor", cssVar("--thread-line") || "#c3c2bb");
@@ -239,7 +349,7 @@ export function ReplyNetwork({
       const [s, t] = graph.extremities(key);
       return near.has(s) && near.has(t) ? data : { ...data, hidden: true };
     });
-    renderer.refresh();
+    renderer.refresh({ skipIndexation: true });
   }, [selected, hovered, shown]);
 
   /** Greedy name placement: the busiest accounts first, no two overlapping. */
@@ -325,6 +435,22 @@ export function ReplyNetwork({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="flex overflow-hidden rounded-md border" role="group" aria-label="Filter accounts">
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              aria-pressed={filter === f.id}
+              className={
+                filter === f.id
+                  ? "bg-primary text-primary-foreground px-3 py-1.5 text-xs"
+                  : "text-muted-foreground hover:bg-accent px-3 py-1.5 text-xs"
+              }
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
         <div className="flex overflow-hidden rounded-md border" role="group" aria-label="Which replies to draw">
           {[
             { n: 2, label: "Repeated exchanges" },
@@ -350,21 +476,22 @@ export function ReplyNetwork({
         </span>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
-        {STANDING_ORDER.map((s) => (
-          <span key={s} className="flex items-center gap-1.5" title={STANDING_META[s].help}>
+      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+        <span className="text-muted-foreground">Publication record</span>
+        {BAND_ORDER.map((b) => (
+          <span key={b} className="flex items-center gap-1.5" title={BAND_META[b].help}>
             <i
               className="inline-block size-3 shrink-0 rounded-full"
-              style={{ background: `var(${STANDING_META[s].token})` }}
+              style={{ background: `var(${BAND_META[b].token})` }}
             />
-            <span className="text-muted-foreground">{STANDING_META[s].label}</span>
+            <span className="text-muted-foreground">{BAND_META[b].label}</span>
             <span className="tnum text-foreground font-medium">
-              {shown.people.filter((p) => p.standing === s).length}
+              {shown.people.filter((p) => p.band === b).length}
             </span>
           </span>
         ))}
         <span className="text-muted-foreground ml-auto">
-          size is messages sent · a line means one answered the other
+          size is messages sent · a line means one answered the other · drag a node to move it
         </span>
       </div>
 
@@ -372,15 +499,20 @@ export function ReplyNetwork({
         <div className="bg-card mt-3 rounded-lg border p-3">
           <div className="flex flex-wrap items-baseline gap-x-3">
             <span className="text-sm font-semibold">{selected.name}</span>
-            <span className="text-muted-foreground text-xs">
-              {STANDING_META[selected.standing].label.toLowerCase()}
+            <span className="tnum text-muted-foreground text-xs">
+              publication record {selected.score}/100
             </span>
           </div>
           <p className="text-muted-foreground tnum mt-1 text-xs">
+            {selected.rfcs} RFC{selected.rfcs === 1 ? "" : "s"} ·{" "}
+            {selected.adopted_drafts} adopted draft{selected.adopted_drafts === 1 ? "" : "s"}
+            {selected.chairs_now && " · chairs a working group"}
+            {!selected.in_datatracker && " · no Datatracker record"}
+          </p>
+          <p className="text-muted-foreground tnum mt-0.5 text-xs">
             {selected.messages} message{selected.messages === 1 ? "" : "s"} ·{" "}
             {selected.replies_sent} repl{selected.replies_sent === 1 ? "y" : "ies"} sent ·{" "}
-            {selected.replies_received} received ·{" "}
-            {selected.lists.join(", ")}
+            {selected.replies_received} received · {selected.lists.join(", ")}
             {selected.first_seen && ` · first posted ${selected.first_seen.slice(0, 10)}`}
           </p>
         </div>

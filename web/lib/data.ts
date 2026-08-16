@@ -314,10 +314,16 @@ export interface ThreadLanguage {
 export interface ReplyNetwork {
   publication: string;
   lists: string[];
+  daily: { day: string; extensive: number; established: number; some: number; none: number }[];
   nodes: {
     id: string;
     name: string;
-    standing: "standing" | "record" | "no_record";
+    score: number;
+    band: "none" | "some" | "established" | "extensive";
+    rfcs: number;
+    adopted_drafts: number;
+    chairs_now: boolean;
+    in_datatracker: boolean;
     messages: number;
     replies_sent: number;
     replies_received: number;

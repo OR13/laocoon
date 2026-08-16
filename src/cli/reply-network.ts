@@ -26,9 +26,11 @@
  */
 import { parseArgs } from "node:util";
 import { join } from "node:path";
-import type { Event, MessageObserved, ReplyGraph } from "../schema/generated.ts";
+import type { Event, MessageObserved, PrivateEvent, ReplyGraph } from "../schema/generated.ts";
 import { JsonlEventStore } from "../store/jsonl-store.ts";
 import { assertPublishableArtifact } from "../site/publishable.ts";
+import { bandOf, recordScore, type RecordScore } from "../seed/record-score.ts";
+import { JsonlEventStore as PrivateStore } from "../store/jsonl-store.ts";
 import { ARTIFACTS_DIR, EVENTS_DIR, PRIVATE_DIR } from "../lib/paths.ts";
 
 const { values } = parseArgs({
@@ -59,10 +61,42 @@ for (const line of (await sendersFile.text()).split("\n")) {
 const seedDoc = JSON.parse(
   await Bun.file(join(PRIVATE_DIR, "artifacts", "seed.json")).text(),
 ) as {
-  members: { sender_id: string }[];
-  unseeded: { sender_id: string; reason: string }[];
+  members: { sender_id: string; person_id: number | null }[];
+  unseeded: { sender_id: string; person_id: number | null; reason: string }[];
 };
 const standing = new Set(seedDoc.members.map((m) => m.sender_id));
+const personOf = new Map<string, number>();
+for (const m of [...seedDoc.members, ...seedDoc.unseeded]) {
+  if (m.person_id != null) personOf.set(m.sender_id, m.person_id);
+}
+
+// The publication record, from the private Datatracker events. Only the
+// resulting score and its counts reach the artifact — the raw record stays
+// where it was fetched to.
+interface Fetched {
+  person_id: number;
+  rfc_authorships: number;
+  wg_document_authorships: string[];
+  chair_roles: { current: boolean; group_type: string }[];
+  ad_roles: unknown[];
+  iab_iesg_roles: unknown[];
+}
+const records = new Map<number, Fetched>();
+const privateStore = new PrivateStore<PrivateEvent>(
+  join(PRIVATE_DIR, "events"),
+  "private-event",
+);
+for await (const event of privateStore.read()) {
+  if (event.event_type !== "DatatrackerRecordFetched") continue;
+  const payload = event.payload as Fetched;
+  records.set(payload.person_id, payload);
+}
+function scoreOf(senderId: string): RecordScore | null {
+  const personId = personOf.get(senderId);
+  if (personId == null) return null;
+  const record = records.get(personId);
+  return record ? recordScore(record) : null;
+}
 const noRecord = new Set(
   seedDoc.unseeded.filter((u) => u.reason === "no_datatracker_record").map((u) => u.sender_id),
 );
@@ -167,22 +201,61 @@ for (const edge of graph.edges) {
   repliesReceived.set(parent.sender_id, (repliesReceived.get(parent.sender_id) ?? 0) + 1);
 }
 
-const nodes = [...messages.keys()].map((id) => ({
+const nodes = [...messages.keys()].map((id) => {
+  const record = scoreOf(id);
+  return {
   id: slugFor(id),
   name: labelFor(id),
-  // The three states the picture is about, each from one lookup and no model.
-  standing: standing.has(id)
-    ? ("standing" as const)
-    : noRecord.has(id)
-      ? ("no_record" as const)
-      : ("record" as const),
+  /** 0-100 from published RFCs, adopted drafts and roles. See seed/record-score.ts. */
+  score: record?.score ?? 0,
+  band: bandOf(record?.score ?? 0),
+  rfcs: record?.rfcs ?? 0,
+  adopted_drafts: record?.adopted_drafts ?? 0,
+  chairs_now: record?.chairs_now ?? false,
+  /** Whether the IETF has any record of this address at all. */
+  in_datatracker: !noRecord.has(id) && record !== null,
   messages: messages.get(id) ?? 0,
   replies_sent: repliesSent.get(id) ?? 0,
   replies_received: repliesReceived.get(id) ?? 0,
   lists: [...(listsOf.get(id) ?? [])].sort(),
   first_seen: firstSeen.get(id) ?? null,
-}));
+  };
+});
 nodes.sort((a, b) => b.messages - a.messages || a.id.localeCompare(b.id));
+
+/**
+ * Messages per day, split by the sender's publication-record band.
+ *
+ * The trend this replaces plotted "participants" against "participants with
+ * standing", which framed the list as two classes of person. Banding a
+ * continuous score says the same thing about who is carrying the traffic
+ * without sorting anyone into the anointed and the rest.
+ */
+type DayCounts = { extensive: number; established: number; some: number; none: number };
+const daily = new Map<string, DayCounts>();
+const bandOfSender = new Map<string, keyof DayCounts>();
+for (const id of messages.keys()) bandOfSender.set(id, bandOf(scoreOf(id)?.score ?? 0) as keyof DayCounts);
+for (const n of graph.nodes) {
+  if (!n.sent_at) continue;
+  const day = n.sent_at.slice(0, 10);
+  const row: DayCounts = daily.get(day) ?? { extensive: 0, established: 0, some: 0, none: 0 };
+  row[(bandOfSender.get(n.sender_id) ?? "none") as keyof DayCounts] += 1;
+  daily.set(day, row);
+}
+// Days with no traffic are emitted as zeroes: a gap in a trend line has to
+// read as "nothing happened", not as "not measured".
+const days: ({ day: string } & DayCounts)[] = [];
+const sortedDays = [...daily.keys()].sort();
+if (sortedDays.length > 0) {
+  const cursor = new Date(`${sortedDays[0]!}T00:00:00Z`);
+  const last = new Date(`${sortedDays[sortedDays.length - 1]!}T00:00:00Z`);
+  while (cursor <= last) {
+    const day = cursor.toISOString().slice(0, 10);
+    const row: DayCounts = daily.get(day) ?? { extensive: 0, established: 0, some: 0, none: 0 };
+    days.push({ day, ...row });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+}
 
 const artifact = {
   schema_version: "1.0.0",
@@ -193,10 +266,12 @@ const artifact = {
   lists: graph.coverage.lists,
   reads_as:
     "Who replied to whom, from the From: headers and threading headers of posts " +
-    "to public IETF lists. Nodes are sized by messages sent, which is a count. " +
-    "No per-person score appears here: reputation is this system's opinion of a " +
-    "person and stays local.",
+    "to public IETF lists. The score is a summary of a person's published IETF " +
+    "record — RFCs, adopted drafts, roles — and is not a rating of their " +
+    "messages. The graph-position reputation this system computes is a " +
+    "different thing and stays local.",
   self_replies_dropped: selfReplies,
+  daily: days,
   nodes,
   edges: [...pairs.values()].sort((a, b) => b.replies - a.replies),
 };
@@ -205,8 +280,8 @@ const out = values.out ?? join(ARTIFACTS_DIR, "reply-network.json");
 assertPublishableArtifact(out, artifact);
 await Bun.write(out, JSON.stringify(artifact, null, 2) + "\n");
 
-const counts = { standing: 0, record: 0, no_record: 0 };
-for (const n of nodes) counts[n.standing]++;
+const counts: Record<string, number> = {};
+for (const n of nodes) counts[n.band] = (counts[n.band] ?? 0) + 1;
 console.log(
   JSON.stringify(
     { out, people: nodes.length, edges: artifact.edges.length, selfReplies, counts },

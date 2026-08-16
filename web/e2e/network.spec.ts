@@ -181,6 +181,113 @@ test.describe("reply network", () => {
     await expect(page.getByText(String(at.name), { exact: false }).first()).toBeVisible();
   });
 
+  test("sigma sizes itself to the container, not to a stale width", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    const { rendererWidth, containerWidth } = await page.evaluate(() => {
+      const { renderer } = (window as unknown as { __laocoon: { renderer: any } }).__laocoon;
+      return {
+        rendererWidth: renderer.getDimensions().width,
+        containerWidth: Math.round((renderer.getContainer() as HTMLElement).clientWidth),
+      };
+    });
+    // sigma measures once and does not watch. The review panel takes 19rem of
+    // body padding, so the graph initialised 304px narrow and jumped 152px —
+    // half of it — the first time anything triggered a resize check.
+    expect(Math.abs(rendererWidth - containerWidth)).toBeLessThan(4);
+  });
+
+  test("hovering a node does not move the picture", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    const where = async () =>
+      page.evaluate(() => {
+        const { renderer, graph } = (window as unknown as { __laocoon: { renderer: any; graph: any } })
+          .__laocoon;
+        const key = graph
+          .nodes()
+          .sort(
+            (a: string, b: string) =>
+              graph.getNodeAttribute(b, "size") - graph.getNodeAttribute(a, "size"),
+          )[0];
+        const p = renderer.framedGraphToViewport(renderer.getNodeDisplayData(key));
+        const c = (renderer.getContainer() as HTMLElement).getBoundingClientRect();
+        return { key, x: c.left + p.x, y: c.top + p.y };
+      });
+    await page.evaluate(() =>
+      document.querySelector("canvas")?.scrollIntoView({ block: "center" }),
+    );
+    await page.waitForTimeout(400);
+    const before = await where();
+    await page.mouse.move(before.x, before.y);
+    await page.waitForTimeout(400);
+    const after = await where();
+    expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeLessThan(4);
+  });
+
+  test("a node can be dragged", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    await page.evaluate(() =>
+      document.querySelector("canvas")?.scrollIntoView({ block: "center" }),
+    );
+    await page.waitForTimeout(500);
+    const at = await page.evaluate(() => {
+      const { renderer, graph } = (window as unknown as { __laocoon: { renderer: any; graph: any } })
+        .__laocoon;
+      const key = graph
+        .nodes()
+        .sort(
+          (a: string, b: string) =>
+            graph.getNodeAttribute(b, "size") - graph.getNodeAttribute(a, "size"),
+        )[0];
+      const p = renderer.framedGraphToViewport(renderer.getNodeDisplayData(key));
+      const c = (renderer.getContainer() as HTMLElement).getBoundingClientRect();
+      return {
+        key,
+        x: c.left + p.x,
+        y: c.top + p.y,
+        gx: graph.getNodeAttribute(key, "x"),
+        gy: graph.getNodeAttribute(key, "y"),
+      };
+    });
+    await page.mouse.move(at.x, at.y);
+    await page.waitForTimeout(250);
+    await page.mouse.down();
+    await page.waitForTimeout(120);
+    await page.mouse.move(at.x + 150, at.y - 110, { steps: 15 });
+    await page.waitForTimeout(200);
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    const after = await page.evaluate(
+      (key) => {
+        const { graph } = (window as unknown as { __laocoon: { graph: any } }).__laocoon;
+        return { gx: graph.getNodeAttribute(key, "x"), gy: graph.getNodeAttribute(key, "y") };
+      },
+      at.key,
+    );
+    // sigma binds mousemove on the document and stops propagation while
+    // panning, so a listener on window never ran and the drag latched without
+    // moving anything. These are capture-phase on the document.
+    expect(Math.hypot(after.gx - at.gx, after.gy - at.gy)).toBeGreaterThan(0.5);
+  });
+
+  test("the record filters change the picture", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    const nodes = () =>
+      page.evaluate(
+        () => (window as unknown as { __laocoon: { graph: any } }).__laocoon.graph.order,
+      );
+    const everyone = await nodes();
+    await page.getByRole("button", { name: "3 or more RFCs" }).click();
+    await page.waitForTimeout(1800);
+    const prolific = await nodes();
+    console.log(`filters: everyone ${everyone}, 3+ RFCs ${prolific}`);
+    expect(prolific).toBeLessThan(everyone);
+    expect(prolific).toBeGreaterThan(0);
+  });
+
   test("reset view returns the camera to the default framing", async ({ page }) => {
     await page.goto("/index.html");
     await settle(page);

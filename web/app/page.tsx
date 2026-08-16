@@ -57,7 +57,7 @@ export default async function OverviewPage() {
   return (
     <SiteShell
       title="LAOCOÖN"
-      lede="Which discussions the established part of the group turned up for, and which they did not."
+      lede="Who is talking to whom on the agentproto and agent2agent lists, and what they have published."
       active="/"
       nav={PUBLIC_NAV}
       banner={<ExperimentalBanner />}
@@ -65,8 +65,13 @@ export default async function OverviewPage() {
         <>
           <p>{coverageLine(windows)}</p>
           <p className="mt-1">
-            Every figure derives from an event committed to the repository. Per-person
-            scores are not published and do not appear on this site.
+            Every figure derives from an event committed to the repository. Names and
+            reply relationships are republished from public list posts; the publication
+            record score is computed from the Datatracker and{" "}
+            <a className="text-primary underline" href="/methodology/#record-score">
+              defined in the methodology
+            </a>
+            .
           </p>
         </>
       }
@@ -78,6 +83,7 @@ export default async function OverviewPage() {
         newcomerWins={newcomerWins}
         people={network?.nodes ?? []}
         replies={network?.edges ?? []}
+        daily={network?.daily ?? []}
       />
     </SiteShell>
   );

@@ -7,9 +7,17 @@ import { loadPublic } from "@/lib/data";
 
 const REPO = "https://github.com/OR13/laocoon";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  id,
+  children,
+}: {
+  title: string;
+  id?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="mt-8 max-w-[78ch]">
+    <section id={id} className="mt-8 max-w-[78ch] scroll-mt-6">
       <h2 className="mb-2 border-b pb-1 text-lg font-semibold">{title}</h2>
       <div className="text-muted-foreground space-y-2 text-sm">{children}</div>
     </section>
@@ -150,6 +158,81 @@ export default async function MethodologyPage() {
             <dt>Seed rule version</dt><dd>{provenance.seed_rule_version}</dd>
           </dl>
         )}
+      </Section>
+
+      <Section title="Publication record score" id="record-score">
+        <p>
+          Each account gets a score out of 100 summarising what the IETF&apos;s own records
+          say they have published. It is used to colour the network on the overview and to
+          band the daily traffic. It replaced a binary — holds community-conferred standing,
+          or does not — which sorted a mailing list into two classes of person and read as
+          a caste mark.
+        </p>
+        <p>
+          <strong>It is not a rating of anyone&apos;s messages</strong>, their judgement, or
+          their worth to a discussion. Every term is a count of something already published
+          under that person&apos;s name. A score of zero means no published IETF record,
+          which is the ordinary state of a new participant and of anyone who contributes
+          without filing documents. Nothing in the pipeline treats a low score as a reason
+          to discount a message, and no measure of message quality feeds into it.
+        </p>
+        <table className="mt-2 w-full text-sm">
+          <thead>
+            <tr className="border-b">
+              <th className="py-1.5 text-left font-semibold">Term</th>
+              <th className="py-1.5 text-right font-semibold">Points</th>
+              <th className="py-1.5 text-left font-semibold">Full at</th>
+            </tr>
+          </thead>
+          <tbody className="[&_td]:py-1.5">
+            <tr className="border-b">
+              <td>Published RFCs</td>
+              <td className="tnum text-right">40</td>
+              <td>25 RFCs</td>
+            </tr>
+            <tr className="border-b">
+              <td>Adopted working-group drafts (<code>draft-ietf-*</code>)</td>
+              <td className="tnum text-right">20</td>
+              <td>5 drafts</td>
+            </tr>
+            <tr className="border-b">
+              <td>Currently chairs a working group</td>
+              <td className="tnum text-right">25</td>
+              <td>—</td>
+            </tr>
+            <tr className="border-b">
+              <td>Has chaired one</td>
+              <td className="tnum text-right">12</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>Area Director, IAB or IESG</td>
+              <td className="tnum text-right">15</td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="pt-1">
+          The two counted terms <strong>saturate logarithmically</strong>: the difference
+          between nought and three RFCs says far more than the difference between sixty and
+          eighty-three, and without saturation the handful of very prolific authors would
+          flatten everyone else against zero. Chairing counts once at its highest level —
+          a current chair who also chaired before has one responsibility, not two.
+        </p>
+        <p>
+          The constants are <strong>fixed reference points, not percentiles of this
+          corpus</strong>. Deriving them from the crawl would move the scale every time it
+          grew and make two runs incomparable, which is the same
+          cannot-produce-a-negative-result failure that removed the health verdict. They
+          are stated here so each can be argued with on its own, and the score always
+          breaks back down into its parts on screen.
+        </p>
+        <p>
+          Bands are round numbers on the scale — 0, 1–29, 30–59, 60–100 — and are named for
+          a quantity of published work rather than for a kind of person. An individual
+          submission that no working group adopted does not count, on the same reasoning as
+          the seed rule: it is an act by the author rather than one the community took.
+        </p>
       </Section>
 
       <Section title="Topics">

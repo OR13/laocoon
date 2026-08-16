@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { Button } from "@/components/ui/button";
 import { RANGES } from "@/components/time-range";
@@ -11,7 +11,7 @@ import {
   ENGAGEMENT_META, ENGAGEMENT_ORDER, engagementOf, type MapThread,
 } from "@/components/thread-map";
 import dynamic from "next/dynamic";
-import type { NetworkEdge, NetworkPerson } from "@/components/reply-network";
+import { BAND_META, BAND_ORDER, type NetworkEdge, type NetworkPerson } from "@/components/reply-network";
 
 // sigma reads WebGL2RenderingContext at import time, absent during prerender.
 const ReplyNetwork = dynamic(
@@ -70,12 +70,14 @@ export function OverviewSections({
   newcomerWins,
   people,
   replies,
+  daily,
 }: {
   threads: MapThread[];
   activity: Activity | null;
   newcomerWins: NewcomerWin[];
   people: NetworkPerson[];
   replies: NetworkEdge[];
+  daily: { day: string; extensive: number; established: number; some: number; none: number }[];
 }) {
   const [days, setDays] = useState(30);
   const [list, setList] = useState("all");
@@ -93,13 +95,9 @@ export function OverviewSections({
     return out;
   }, [visible]);
 
-  const unanswered = useMemo(
-    () => [...byState.none].sort((a, b) => b.messages - a.messages || b.participants - a.participants),
-    [byState.none],
-  );
-  const answered = useMemo(
-    () => [...byState.answering].sort((a, b) => b.messages - a.messages),
-    [byState.answering],
+  const busiest = useMemo(
+    () => [...visible].sort((a, b) => b.messages - a.messages || b.participants - a.participants),
+    [visible],
   );
 
   const messagesIn = (rows: MapThread[]) => rows.reduce((n, t) => n + t.messages, 0);
@@ -116,18 +114,12 @@ export function OverviewSections({
     [newcomerWins, list],
   );
 
+  // Messages per day by the sender's publication record. Same unit in every
+  // band, so the bands stack and the total is the day's traffic.
   const trend = useMemo(() => {
-    if (!activity) return [];
-    const rows = days > 0 ? activity.daily.slice(-days) : activity.daily;
-    // Both series are counts of people. Messages and people on one axis put
-    // the series that matters flat along the bottom, and a second axis is
-    // never the answer to that.
-    return rows.map((d) => ({
-      day: d.day.slice(5),
-      participants: d.participants,
-      with_standing: d.participants_with_standing,
-    }));
-  }, [activity, days]);
+    const rows = days > 0 ? daily.slice(-days) : daily;
+    return rows.map((d) => ({ ...d, day: d.day.slice(5) }));
+  }, [daily, days]);
 
   return (
     <div className="pb-16">
@@ -170,91 +162,32 @@ export function OverviewSections({
         </span>
       </div>
 
-      <Section id="share" question="How much of this went unanswered by anyone established?">
-        <Headline
-          value={`${sharePct}%`}
-          caption={
-            <>
-              of the {totalMessages} messages in view are in threads where{" "}
-              <strong>nobody holding community-conferred standing took part at all</strong> —{" "}
-              {byState.none.length} of {visible.length} threads. That is a fact about who posted,
-              not a judgement of the discussion: a thread of people the chairs simply did not
-              read looks the same.
-            </>
-          }
-        />
-        <div className="mt-6">
-          <SplitBar
-            parts={ENGAGEMENT_ORDER.map((state) => ({
-              label: ENGAGEMENT_META[state].label,
-              value: byState[state].length,
-              token: ENGAGEMENT_META[state].token,
-              help: ENGAGEMENT_META[state].help,
-            }))}
-          />
-        </div>
-      </Section>
-
       <Section id="network" question="Who is talking to whom">
         <p className="text-muted-foreground mb-4 max-w-[76ch] text-sm">
-          Everyone who has posted to either list, joined by who answered whom. People who
-          reply to each other are drawn near each other, so a cluster is a conversation and
-          the space between clusters is the absence of one.
+          Everyone who has posted to either list, joined by who answered whom. Colour is
+          each account&apos;s published IETF record — RFCs, adopted drafts and roles, scored
+          out of 100 and{" "}
+          <a className="text-primary underline" href="/methodology/#record-score">
+            defined here
+          </a>
+          . Drag a node to pull it out of the pile.
         </p>
-        <ReplyNetwork people={people} edges={replies} />
+        <ReplyNetwork people={people} edges={replies} height={640} />
       </Section>
 
-      <Section id="unanswered" question="What drew the most traffic without them?">
-        <ThreadList
-          threads={unanswered}
-          empty="Every thread in this window had a participant with standing."
-          state={() => "none"}
-        />
+      <Section id="threads" question="Busiest threads">
+        <p className="text-muted-foreground mb-4 max-w-[76ch] text-sm">
+          The most active discussions in the window, with a link into the archive.
+        </p>
+        <ThreadList threads={busiest} empty="No threads in this window." limit={10} />
       </Section>
-
-      <Section id="answered" question="What did they turn up for?">
-        <ThreadList
-          threads={answered}
-          empty="No thread in this window drew a reply from an account with standing."
-          state={engagementOf}
-        />
-      </Section>
-
-      {newcomers.length > 0 && (
-        <Section id="newcomers" question="Who got it right on their first try?">
-          <p className="text-muted-foreground mb-3 max-w-[70ch] text-sm">
-            A participant&apos;s first message that drew a reply from someone with standing.
-            Worked examples, and the most useful thing to show a newcomer.
-          </p>
-          <ul className="divide-y">
-            {newcomers.map((m) => (
-              <li key={m.message_id} className="py-2.5">
-                <a
-                  href={m.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-primary text-sm hover:underline"
-                >
-                  {m.gist?.trim() || m.message_id.slice(0, 60)}
-                  {m.gist && !/[.!?:]$/.test(m.gist.trim()) ? "…" : ""} ↗
-                </a>
-                <div className="text-muted-foreground tnum mt-0.5 text-xs">
-                  {m.sent_at?.slice(0, 10) ?? "—"} · {m.replies_from_standing} repl
-                  {m.replies_from_standing === 1 ? "y" : "ies"} from standing · thread of{" "}
-                  {m.thread_messages}
-                  <span className="ml-1.5 tracking-wide uppercase opacity-70">{m.list_name}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
 
       {trend.length > 1 && (
-        <Section id="trend" question="Is it getting better or worse?">
-          <p className="text-muted-foreground mb-4 max-w-[74ch] text-sm">
-            People posting each day, and how many of them hold community-conferred standing.
-            Both are counts of people, so the gap between the lines is the reading.
+        <Section id="trend" question="Messages per day, by the sender's published record">
+          <p className="text-muted-foreground mb-4 max-w-[76ch] text-sm">
+            Every message in the window, stacked by how much its sender has published in
+            the IETF. The bands share one unit, so the height is the day&apos;s traffic and
+            the composition is who produced it.
           </p>
           <div className="h-[220px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -263,16 +196,21 @@ export function OverviewSections({
                 <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} />
                 <YAxis tickLine={false} axisLine={false} width={28} allowDecimals={false} />
                 <Tooltip />
-                <Area
-                  dataKey="participants" type="monotone" strokeWidth={2} isAnimationActive={false}
-                  stroke="var(--eng-none)" fill="var(--eng-none)" fillOpacity={0.15}
-                  name="People posting"
-                />
-                <Area
-                  dataKey="with_standing" type="monotone" strokeWidth={2} isAnimationActive={false}
-                  stroke="var(--eng-answering)" fill="var(--eng-answering)" fillOpacity={0.2}
-                  name="…with standing"
-                />
+                <Legend />
+                {BAND_ORDER.slice().reverse().map((b) => (
+                  <Area
+                    key={b}
+                    dataKey={b}
+                    stackId="messages"
+                    type="monotone"
+                    strokeWidth={1}
+                    isAnimationActive={false}
+                    stroke={`var(${BAND_META[b].token})`}
+                    fill={`var(${BAND_META[b].token})`}
+                    fillOpacity={0.85}
+                    name={`${BAND_META[b].label} published record`}
+                  />
+                ))}
               </AreaChart>
             </ResponsiveContainer>
           </div>
