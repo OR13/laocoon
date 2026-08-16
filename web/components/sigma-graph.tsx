@@ -272,7 +272,10 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
     (window as unknown as { __laocoon?: unknown }).__laocoon = { renderer, graph };
     paint();
     renderer.refresh();
-    setStats(`${graph.order} nodes, ${graph.size} edges · layout ${layoutMs} ms`);
+    // Counts help a reader judge what they are looking at; the layout time
+    // was developer telemetry on a public page.
+    void layoutMs;
+    setStats(`${graph.order} nodes, ${graph.size} edges`);
 
     cancelAnimation.current?.();
     cancelAnimation.current = animateNodes(

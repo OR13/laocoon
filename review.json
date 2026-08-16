@@ -1,32 +1,32 @@
 {
-  "cycle": "2026-08-15-signal",
+  "cycle": "2026-08-16-explorable",
   "pending": true,
-  "title": "Signal recovery, and the two lists kept apart",
+  "title": "Presentation pass: explorable tables, computed language measures",
   "summary": "",
   "focus": [
     {
+      "id": "language",
+      "target": "[data-review='language']",
+      "title": "17% interchangeable, 45% cite nothing",
+      "ask": "Two new measures, both computed rather than judged. 17% of agent2agent messages sit no closer in vocabulary to their own thread than to any other; 45% cite nothing checkable. Is this the picture of the list you were describing, or is it measuring something adjacent to it?"
+    },
+    {
       "id": "contribution",
       "target": "[data-review='contribution']",
-      "title": "What draws engagement — agent2agent",
-      "ask": "Nothing about the message predicts a reply from someone with standing. Length −0.056, novelty +0.008, depth −0.019. The only signal is that the author already had standing: +0.218. Does that match what you see reading the list?"
+      "title": "Only 2 of 7 properties replicate across both lists",
+      "ask": "The callout is now derived from the table rather than written beside it. Asking a question and already having standing are the only properties that clear 0.15 on both lists in the same direction. Everything else moves on one list only. Does that read as the finding, or as hedging?"
     },
     {
-      "id": "buried",
-      "target": "[data-review='contribution']",
-      "title": "25 buried, 15 newcomers who landed it",
-      "ask": "Buried = drew a standing reply inside a thread of 6 messages or fewer. Newcomer wins = a first message that drew one. Are these the comments you meant were getting lost?"
-    },
-    {
-      "id": "lists",
+      "id": "topics",
       "target": "[data-review='topics']",
-      "title": "Two hue families in the graph",
-      "ask": "agentproto is blue, agent2agent is orange; step within a hue is novelty. Can you tell the lists apart at a glance, or does hue need to carry something else?"
+      "title": "7 of 45 topics carry a name at once",
+      "ask": "Labels are now placed greedily so none overlap, which means most topics are unnamed until you hover or zoom in. Is that the right trade against the previous state, where 28 of 45 names printed on top of each other?"
     },
     {
-      "id": "cross-list",
-      "target": "[data-review='cross-list']",
-      "title": "22 of 28 agentproto senders are also on agent2agent",
-      "ask": "You asked for separate corpora with shared analysis. Identity and the seed are shared; measures are per list. Is that the right seam?"
+      "id": "findings",
+      "target": "[data-review='findings']",
+      "title": "301 of 392 threads are too short to measure",
+      "ask": "Thread-level language measures are withheld below four messages, because a two-message thread's similarity to its own thread is one comparison and it dominated the sort. That leaves 91 threads with those columns. Is a four-message floor right, or does it hide the short exchanges you most want to see?"
     }
   ]
 }

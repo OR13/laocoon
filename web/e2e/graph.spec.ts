@@ -218,12 +218,24 @@ async function shoot(page: Page, name: string) {
   await page.screenshot({ path: `${SHOTS}/${name}` });
 }
 
-async function settle(page: Page) {
+/**
+ * Wait for the graph, and by default get the review panel out of the way.
+ *
+ * The panel scrolls to its first focus item 700ms after load. A test that had
+ * already scrolled the canvas into view and computed click coordinates then
+ * had the page move underneath it — the click landed on empty space, and only
+ * when the suite ran in sequence, so it read as a flake.
+ */
+async function settle(page: Page, keepReview = false) {
   await page.waitForFunction(
     () => Boolean((window as unknown as { __laocoon?: unknown }).__laocoon),
     null,
     { timeout: 20_000 },
   );
+  if (!keepReview) {
+    await page.waitForTimeout(900);
+    await page.keyboard.press("Escape");
+  }
   // The expand animation runs 520ms; give it room plus a paint.
   await page.waitForTimeout(900);
 }
@@ -385,7 +397,7 @@ test.describe("graph explorer", () => {
 
   test("the review panel shifts the page instead of covering it", async ({ page }) => {
     await page.goto("/index.html");
-    await settle(page);
+    await settle(page, true);
     const panel = page.getByRole("complementary", { name: "Design review" });
     await expect(panel).toBeVisible();
     const panelBox = (await panel.boundingBox())!;
@@ -397,6 +409,15 @@ test.describe("graph explorer", () => {
       return cards.filter((el) => el.getBoundingClientRect().right > left + 1).length;
     }, panelBox.x);
     expect(overlapping, "content runs underneath the review panel").toBe(0);
+  });
+
+  test("every design-review focus points at something on the page", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page, true);
+    // A focus item whose anchor is absent made its button silently do nothing.
+    // review.json shipped one for three cycles.
+    const dead = await page.locator("text=target missing").count();
+    expect(dead, "a review focus targets an anchor that is not on the page").toBe(0);
   });
 
   test("dark mode paints the graph, not a black rectangle", async ({ page }) => {

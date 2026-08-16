@@ -36,6 +36,16 @@ export function ReviewPanel({ spec }: { spec: ReviewSpec }) {
   const [open, setOpen] = useState(spec.pending);
   const [active, setActive] = useState<string | null>(null);
 
+  /** Focus items whose target is not on this page. A dead anchor made the
+   *  button do nothing at all, which is indistinguishable from a slow scroll. */
+  const [missing, setMissing] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setMissing(
+      new Set(spec.focus.filter((f) => !document.querySelector(f.target)).map((f) => f.id)),
+    );
+  }, [spec.focus]);
+
   const focusOn = useCallback((item: ReviewFocus) => {
     setActive(item.id);
     const el = document.querySelector(item.target);
@@ -126,7 +136,13 @@ export function ReviewPanel({ spec }: { spec: ReviewSpec }) {
                     <div className="text-xs leading-snug font-medium">{item.ask}</div>
                     <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-[11px]">
                       {item.title}
-                      <ChevronRight className="size-3 shrink-0" aria-hidden />
+                      {missing.has(item.id) ? (
+                        <span className="text-[var(--warn)]" title={`No ${item.target} on this page`}>
+                          · target missing
+                        </span>
+                      ) : (
+                        <ChevronRight className="size-3 shrink-0" aria-hidden />
+                      )}
                     </div>
                   </div>
                 </div>

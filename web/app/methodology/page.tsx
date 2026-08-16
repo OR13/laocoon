@@ -9,9 +9,9 @@ const REPO = "https://github.com/OR13/laocoon";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mt-8">
+    <section className="mt-8 max-w-[78ch]">
       <h2 className="mb-2 border-b pb-1 text-lg font-semibold">{title}</h2>
-      <div className="text-muted-foreground max-w-[72ch] space-y-2 text-sm">{children}</div>
+      <div className="text-muted-foreground space-y-2 text-sm">{children}</div>
     </section>
   );
 }
@@ -85,24 +85,99 @@ export default async function MethodologyPage() {
         </p>
       </Section>
 
-      <Section title="Substance classification">
+      <Section title="Judging what a message offers">
         <p>
-          Every reply is judged against the message it answers by a local model, asking one
-          question: does this reply address something specific in its parent? Length is not
-          the criterion. Per-message verdicts are private, because a per-message quality
-          label joined to a sender is a per-person quality score. Only the per-thread ratio
-          is published. Two models are run, and where they disagree the case is{" "}
-          <strong>flagged for review rather than resolved</strong>: choosing a winner would
-          manufacture confidence out of two models that do not agree.
+          The first attempt asked a local model one question — does this reply address
+          something specific in its parent — and returned <em>substantive</em> for 162 of
+          164 replies, <em>hollow</em> once and <em>unclear</em> once. A binary that never
+          says one of its two words measures nothing. It also only ever ran against
+          agentproto, because the reply graph it read covered one list.
+        </p>
+        <p>
+          Novelty was failing from the other direction. It is the share of a reply&apos;s
+          sentences that say something the thread had not already said, so fluent filler
+          scores <em>high</em> on it: new words, new framings, nothing checkable. Neither
+          measure could see a message that commits to nothing.
+        </p>
+        <p>
+          Two measures replaced them, both computed rather than judged, both over
+          authored text only so a reply never inherits the citations in the message it
+          quotes.
+        </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <strong>Concreteness</strong> counts what a message points at that a reader
+            could go and check: Internet-Draft names, RFC numbers, section references,
+            URLs, code, normative keywords, questions, contradictions. A message over 40
+            words that cites nothing, contests nothing and asks nothing is reported as
+            offering nothing checkable. Short acknowledgements are excluded, because a
+            brief &ldquo;yes, that works&rdquo; is a normal and useful thing to send.
+          </li>
+          <li>
+            <strong>Distinctiveness</strong> is a message&apos;s TF-IDF similarity to the
+            rest of its own thread minus its similarity to messages from other threads on
+            the same list. A reply engaging with what is being discussed shares vocabulary
+            with its thread; one made of list-general language is equally close to
+            everything, so the difference falls to zero or below. Terms rather than
+            embeddings, because two messages saying different things about the same
+            subject are semantically close, and shared terms are what belonging to a
+            conversation actually rests on.
+          </li>
+        </ul>
+        <p>
+          Distinctiveness is computed because a model would not report it. Asked whether a
+          reply restates the thread, or could be moved into another thread without looking
+          out of place, a local model answered no for every message in a 43-message sample,
+          twice, under two phrasings — the two properties whose &ldquo;true&rdquo; is
+          unflattering are the two it would not state. Demanding a quote instead of a
+          verdict fixed a third flag that had fired on every message; it did nothing for
+          these two.
+        </p>
+        <p>
+          Thread-level medians are withheld below four messages. A two-message thread&apos;s
+          similarity to &ldquo;the rest of its own thread&rdquo; is one pairwise comparison,
+          and sorting the published table by it put those threads at the top.
+        </p>
+        <p>
+          <strong>None of this concerns provenance.</strong> A person writing
+          list-general prose that cites nothing scores exactly the same as anything else
+          writing it. Per-message rows are private, because a per-message quality label
+          joined to a sender is a per-person quality score; only per-thread medians and
+          list-level shares are published.
         </p>
         {provenance && (
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 pt-1">
-            <dt>Reference model</dt><dd><code>{provenance.classifier_model}</code></dd>
-            <dt>Prompt version</dt><dd>{provenance.prompt_version}</dd>
-            <dt>Prompt hash</dt><dd><code>{provenance.prompt_hash.slice(0, 23)}…</code></dd>
             <dt>Seed rule version</dt><dd>{provenance.seed_rule_version}</dd>
           </dl>
         )}
+      </Section>
+
+      <Section title="Topics">
+        <p>
+          Threads are clustered by complete-linkage agglomeration over message
+          embeddings, and the distance threshold is chosen by held-out prediction rather
+          than by inspection: the winning threshold is the one whose clusters best predict
+          engagement in a window the clustering never saw. It is scored against two
+          baselines — grouping by subject line, and putting everything in one cluster.
+        </p>
+        <p>
+          A cap stops any one cluster taking more than a third of the corpus, and threads
+          are allowed to belong to no topic rather than being forced into the nearest one.
+          A list whose threads are all one conversation therefore contributes no topics at
+          all, which is the correct answer and not a failure.
+        </p>
+      </Section>
+
+      <Section title="Why volume is reported but not rewarded">
+        <p>
+          Reply volume is the baseline every forecaster is scored against, and on the
+          larger list nothing has beaten it. That is reported rather than hidden: a
+          measure that cannot beat counting messages has not earned its place. It is also
+          the reason volume is never presented as a quality signal — the two lists
+          disagree about it, with the baseline running negative on agentproto and winning
+          on agent2agent, which is what a 106-message corpus looks like next to a
+          1,233-message one.
+        </p>
       </Section>
 
       <Section title="Fairness commitments">

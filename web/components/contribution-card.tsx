@@ -46,6 +46,19 @@ function Delta({ value }: { value: number | null }) {
   );
 }
 
+/**
+ * The gist is the first sentence from the embedding cache, and the splitter
+ * sometimes cuts one short — "I was encouraged via DISPATCH to bring this
+ * discussion to the agent2agent" ends there. Mark the fragment rather than
+ * present it as a whole sentence; fixing the splitter means re-embedding the
+ * corpus, and a visible ellipsis is honest in the meantime.
+ */
+function gistOf(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  return /[.!?:]$/.test(trimmed) ? trimmed : `${trimmed}…`;
+}
+
 function MessageRow({ m, list }: { m: ContributionMessage; list: string }) {
   return (
     <li className="border-b py-2 last:border-0">
@@ -55,7 +68,7 @@ function MessageRow({ m, list }: { m: ContributionMessage; list: string }) {
         target="_blank"
         rel="noreferrer"
       >
-        {m.gist || m.message_id.slice(0, 60)} ↗
+        {gistOf(m.gist) || m.message_id.slice(0, 60)} ↗
       </a>
       <div className="text-muted-foreground tnum mt-0.5 text-[11px]">
         {m.sent_at?.slice(0, 10) ?? "—"} · {m.replies_from_standing} repl
@@ -69,16 +82,24 @@ function MessageRow({ m, list }: { m: ContributionMessage; list: string }) {
 export function ContributionCard({ data }: { data: Contribution[] }) {
   if (data.length === 0) return null;
 
-  const messageProperties = ORDER.filter((k) => k !== "author_already_had_standing");
-  const flat = (d: Contribution) =>
-    messageProperties.every((k) => Math.abs(d.what_works[k]?.delta ?? 0) < MEANINGFUL);
-  // The largest corpus is the one a claim can rest on. On the smaller list
-  // several properties move, and they disagree with each other — which is what
-  // 82 replies looks like, not a second finding.
-  const largest = [...data].sort((a, b) => b.replies_examined - a.replies_examined)[0];
-  const identityMoves =
-    Math.abs(largest?.what_works.author_already_had_standing?.delta ?? 0) >= MEANINGFUL;
-  const others = data.filter((d) => d !== largest);
+  // A property replicates when it clears the threshold on every list *in the
+  // same direction*. Anything that moves on one list only is what a
+  // few-dozen-reply sample does, not a second finding — so the callout is
+  // derived from the table rather than written next to it, and it changes when
+  // the numbers do.
+  const replicates = ORDER.filter((key) =>
+    data.every((d) => {
+      const delta = d.what_works[key]?.delta;
+      return delta !== null && delta !== undefined && Math.abs(delta) >= MEANINGFUL;
+    }) &&
+    new Set(data.map((d) => Math.sign(d.what_works[key]?.delta ?? 0))).size === 1,
+  );
+  const singleList = ORDER.filter(
+    (key) =>
+      !replicates.includes(key) &&
+      data.some((d) => Math.abs(d.what_works[key]?.delta ?? 0) >= MEANINGFUL),
+  );
+  const name = (key: string) => LABELS[key]!.toLowerCase();
 
   return (
     <Card className="mt-6" data-review="contribution">
@@ -126,27 +147,27 @@ export function ContributionCard({ data }: { data: Contribution[] }) {
           </table>
         </div>
 
-        {largest && identityMoves && flat(largest) && (
+        {replicates.length > 0 && (
           <div className="mt-3 rounded-md border border-l-[3px] border-l-[var(--warn)] bg-[var(--warn-bg)] p-3 text-xs">
             <strong className="text-[var(--warn)]">
-              On {largest.list_name}, the only line that moves is the last one.
+              {replicates.length === 1
+                ? `Only one property clears ${MEANINGFUL} on both lists: ${name(replicates[0]!)}.`
+                : `${replicates.length} properties clear ${MEANINGFUL} on both lists: ${replicates
+                    .map(name)
+                    .join(" and ")}.`}
             </strong>{" "}
-            Across {largest.replies_examined} replies, length, novelty, citations and
-            thread-specificity are all under {MEANINGFUL} — no measurable property of a
-            message predicts whether an established account answers it. Whether its author
-            already had standing does.
-            {others.some((d) => !flat(d)) && (
+            {replicates.includes("author_already_had_standing") && (
               <>
-                {" "}
-                On{" "}
-                {others
-                  .filter((d) => !flat(d))
-                  .map((d) => `${d.list_name} (${d.replies_examined} replies)`)
-                  .join(" and ")}{" "}
-                several properties do move, in directions that contradict each other —
-                which is what a sample that size looks like, not a second finding.
+                One of them is not a property of the message at all — it is who sent it.{" "}
               </>
-            )}{" "}
+            )}
+            {singleList.length > 0 && (
+              <>
+                {singleList.length} more — {singleList.map(name).join(", ")} — move on one list and not
+                the other, which is what{" "}
+                {Math.min(...data.map((d) => d.replies_examined))} replies buys you.{" "}
+              </>
+            )}
             This is a statement about the lists, not about any participant.
           </div>
         )}
