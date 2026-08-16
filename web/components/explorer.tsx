@@ -97,6 +97,10 @@ export function Explorer({
     }
   }, []);
 
+  // A week's view is six nodes, and 560px of box around them is mostly empty.
+  // The full corpus still gets the full height.
+  const graphHeight = Math.min(560, Math.max(340, 260 + view.nodes.length * 6));
+
   const topicById = useMemo(() => new Map(source.topics.map((t) => [t.id, t])), [source.topics]);
   const threadById = useMemo(() => new Map(source.threads.map((t) => [t.id, t])), [source.threads]);
   const personById = useMemo(() => new Map(source.persons.map((p) => [p.id, p])), [source.persons]);
@@ -188,10 +192,18 @@ export function Explorer({
       )}
 
       <div className="grid gap-3 lg:grid-cols-[1fr_19rem]">
-        <SigmaGraph view={view} onSelect={onSelect} selectedKey={selected?.key ?? null} />
+        <SigmaGraph
+          view={view}
+          onSelect={onSelect}
+          selectedKey={selected?.key ?? null}
+          // A week's view is six nodes, and 560px of box around them is mostly
+          // empty. The full corpus still gets the full height.
+          height={graphHeight}
+        />
         <aside
           data-testid="detail-panel"
-          className="bg-card max-h-[560px] overflow-auto rounded-lg border p-3 text-sm"
+          style={{ maxHeight: graphHeight }}
+          className="bg-card overflow-auto rounded-lg border p-3 text-sm"
         >
           {!selected && (
             <p className="text-muted-foreground text-xs">

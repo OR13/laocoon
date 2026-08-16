@@ -59,6 +59,8 @@ export interface SigmaGraphProps {
  * rejected still names itself on hover.
  */
 const MAX_STANDING_LABELS = 30;
+/** Clear space either side of a label, in pixels. */
+const LABEL_GUTTER = 14;
 
 export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaGraphProps) {
   const boxRef = useRef<HTMLDivElement>(null);
@@ -374,6 +376,7 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
     const place = () => {
       const graph = graphRef.current;
       if (!graph) return;
+      const { width } = renderer.getDimensions();
       const kept: { x1: number; y1: number; x2: number; y2: number }[] = [];
       const next = new Set<string>();
       for (const key of labelCandidates) {
@@ -383,7 +386,20 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
         const p = renderer.framedGraphToViewport(display);
         const label = String(graph.getNodeAttribute(key, "label") ?? "");
         const w = measure.measureText(label).width;
-        const box = { x1: p.x, y1: p.y - size, x2: p.x + w, y2: p.y + size };
+        // The box covers the node's own marker as well as its text. Text-only
+        // boxes cleared each other by 22px and still read as crowded, because
+        // the next topic's circle was sitting in that gap: "…and auditing●AI
+        // Governance and Account…".
+        const radius = renderer.scaleSize ? renderer.scaleSize(display.size) : display.size;
+        const box = {
+          x1: p.x - radius - LABEL_GUTTER,
+          y1: p.y - size,
+          x2: p.x + w + LABEL_GUTTER,
+          y2: p.y + size,
+        };
+        // A label that runs past the canvas is clipped mid-word, which is
+        // worse than not drawing it — the node still names itself on hover.
+        if (box.x2 > width) continue;
         const clashes = kept.some(
           (k) => box.x1 < k.x2 && k.x1 < box.x2 && box.y1 < k.y2 && k.y1 < box.y2,
         );

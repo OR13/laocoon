@@ -52,6 +52,34 @@ const CLUSTER_PADDING = 6.0;
 /** A topic with no threads still needs room for its own marker. */
 const MIN_CLUSTER_RADIUS = 5.0;
 /**
+ * At or below this many clusters, centres go on a grid instead of a spiral.
+ *
+ * A spiral of six clusters is a tall narrow arc — the first turn has not
+ * closed yet — and sigma fits a graph by its longer axis, so six nodes used
+ * 17% of the width of the box. A grid shaped to the box fills it. Above this
+ * count the spiral is roughly circular and packs far better than a grid would.
+ */
+const GRID_MAX_CLUSTERS = 12;
+/** Columns are biased by this much, because the graph box is wider than tall. */
+const BOX_ASPECT = 1.7;
+
+/** Cluster centres on a grid, spaced by the widest disc so none overlap. */
+function gridCentres(radii: number[]): Point[] {
+  const count = radii.length;
+  const columns = Math.max(1, Math.min(count, Math.round(Math.sqrt(count * BOX_ASPECT))));
+  const rows = Math.ceil(count / columns);
+  const step = 2 * Math.max(...radii) + CLUSTER_PADDING;
+  return radii.map((_, i) => {
+    const column = i % columns;
+    const row = Math.floor(i / columns);
+    return {
+      x: (column - (columns - 1) / 2) * step,
+      y: (row - (rows - 1) / 2) * step,
+    };
+  });
+}
+
+/**
  * Horizontal stretch applied to cluster centres. Deliberately 1.
  *
  * Stretching to the box's 16:10 looked obviously right and measured worse:
@@ -182,7 +210,8 @@ export function layout(
   const radii = clusterKeys.map((k) =>
     clusterRadius(threadsByCluster.get(k)?.length ?? 0, innerByCluster.get(k) ?? 0),
   );
-  const centres = spiralCentres(radii);
+  const centres =
+    radii.length <= GRID_MAX_CLUSTERS ? gridCentres(radii) : spiralCentres(radii);
 
   const positions = new Map<string, Point>();
   clusterKeys.forEach((key, index) => {

@@ -177,9 +177,8 @@ export default async function OverviewPage() {
           <CardHeader>
             <CardTitle className="text-base">Thread measures — per list</CardTitle>
             <CardDescription>
-              Three axes, each measured independently and reported as a distribution
-              rather than combined. Shown per list, never pooled: pooling is how a
-              finding from a three-week-old list became a claim about the method.
+              Three axes, each measured independently and shown as a spread rather than
+              combined. Per list, never pooled.
             </CardDescription>
           </CardHeader>
           <CardContent>
