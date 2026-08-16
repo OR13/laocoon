@@ -93,6 +93,28 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
     [],
   );
 
+  /**
+   * Node labels, truncated but kept distinct.
+   *
+   * A 35-character topic name is ~250px of text against a ~900px box, so a
+   * dozen of them collide wherever the layout puts the nodes — but a blind cut
+   * at 26 characters rendered two different topics as the same string, which
+   * is worse than a long label. Anything that would collide keeps enough
+   * characters to stay unique. The full name is one click away in the panel.
+   */
+  const shortLabels = useMemo(() => {
+    const cut = (text: string, at: number) =>
+      text.length > at ? `${text.slice(0, at - 1)}…` : text;
+    const counts = new Map<string, number>();
+    for (const n of view.nodes) counts.set(cut(n.label, 26), (counts.get(cut(n.label, 26)) ?? 0) + 1);
+    const out = new Map<string, string>();
+    for (const n of view.nodes) {
+      const short = cut(n.label, 26);
+      out.set(n.key, counts.get(short)! > 1 ? cut(n.label, 44) : short);
+    }
+    return out;
+  }, [view]);
+
   /** Topic candidates for a standing label, biggest first. */
   const labelCandidates = useMemo(
     () =>
@@ -174,10 +196,7 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
       const min = minBase * Math.max(0.5, scale);
       const span = spanBase * Math.max(0.35, scale);
       graph.addNode(n.key, {
-        // A 35-character topic name is ~250px of text against a ~900px box, so
-        // a dozen of them collide wherever the layout puts the nodes. The full
-        // name is one click away in the detail panel.
-        label: n.label.length > 26 ? `${n.label.slice(0, 25)}…` : n.label,
+        label: shortLabels.get(n.key) ?? n.label,
         tier: n.tier,
         ref: n.ref,
         intensity: n.intensity,
@@ -411,6 +430,21 @@ export function SigmaGraph({ view, height = 560, onSelect, selectedKey }: SigmaG
   return (
     <div className="relative">
       <div ref={boxRef} style={{ height }} className="bg-card w-full rounded-lg border" />
+      {/* Scroll-zoom fires while scrolling the page past the graph, and there
+          was no way back to the default framing except reloading. */}
+      <button
+        type="button"
+        onClick={() => {
+          const camera = sigmaRef.current?.getCamera();
+          camera?.animate({ x: 0.5, y: 0.5, ratio: 1, angle: 0 }, { duration: 320 });
+        }}
+        className="bg-card/90 text-muted-foreground hover:text-foreground absolute top-2 right-2 rounded-md border px-2 py-1 text-[11px] shadow-sm"
+      >
+        Reset view
+      </button>
+      <span className="text-muted-foreground pointer-events-none absolute bottom-2 left-3 text-[11px]">
+        Scroll to zoom · drag to pan
+      </span>
       <span className="text-muted-foreground pointer-events-none absolute right-2 bottom-2 text-[11px]">
         {stats}
       </span>

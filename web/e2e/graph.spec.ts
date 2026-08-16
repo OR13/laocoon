@@ -318,6 +318,10 @@ test.describe("graph explorer", () => {
   test("expand all topics does not produce a hairball", async ({ page }) => {
     await page.goto("/index.html");
     await settle(page);
+    await page.getByRole("group", { name: "Lookback window" })
+      .getByRole("button", { name: "All", exact: true })
+      .click();
+    await page.waitForTimeout(1200);
     await page.getByRole("button", { name: "Expand all topics" }).click();
     await settle(page);
     const r = await readGraph(page);
@@ -330,6 +334,10 @@ test.describe("graph explorer", () => {
   test("the public page offers no people control", async ({ page }) => {
     await page.goto("/index.html");
     await settle(page);
+    await page.getByRole("group", { name: "Lookback window" })
+      .getByRole("button", { name: "All", exact: true })
+      .click();
+    await page.waitForTimeout(1200);
     await page.getByRole("button", { name: "Expand all topics" }).click();
     await settle(page);
     // The public page ships no participation rows, so the control is absent
@@ -346,6 +354,11 @@ test.describe("graph explorer", () => {
   test("a thread is drawn nearer its own topic than any other", async ({ page }) => {
     await page.goto("/index.html");
     await settle(page);
+    // The whole corpus, not the default week: this is the layout's stress case.
+    await page.getByRole("group", { name: "Lookback window" })
+      .getByRole("button", { name: "All", exact: true })
+      .click();
+    await page.waitForTimeout(1200);
     await page.getByRole("button", { name: "Expand all topics" }).click();
     await settle(page);
     const r = await page.evaluate(() => {
@@ -381,6 +394,10 @@ test.describe("graph explorer", () => {
   test("labels do not print on top of each other", async ({ page }) => {
     await page.goto("/index.html");
     await settle(page);
+    await page.getByRole("group", { name: "Lookback window" })
+      .getByRole("button", { name: "All", exact: true })
+      .click();
+    await page.waitForTimeout(1200);
     const collapsed = await labelCollisions(page);
     console.log("collapsed labels:", JSON.stringify(collapsed));
     expect(collapsed.drawn).toBeGreaterThan(0); // a graph with no labels is not the fix
@@ -409,6 +426,56 @@ test.describe("graph explorer", () => {
       return cards.filter((el) => el.getBoundingClientRect().right > left + 1).length;
     }, panelBox.x);
     expect(overlapping, "content runs underneath the review panel").toBe(0);
+  });
+
+  test("reset view returns the camera to the default framing", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    const ratio = () =>
+      page.evaluate(() => (window as unknown as { __laocoon: { renderer: any } }).__laocoon.renderer.getCamera().ratio);
+    await page.evaluate(() =>
+      (window as unknown as { __laocoon: { renderer: any } }).__laocoon.renderer
+        .getCamera()
+        .setState({ ratio: 4, x: 0.9 }),
+    );
+    expect(await ratio()).toBeCloseTo(4, 1);
+    await page.getByRole("button", { name: "Reset view" }).click();
+    await page.waitForTimeout(700);
+    expect(await ratio()).toBeCloseTo(1, 1);
+  });
+
+  test("the lookback window filters the graph", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    const nodes = () =>
+      page.evaluate(
+        () => (window as unknown as { __laocoon: { graph: any } }).__laocoon.graph.order,
+      );
+    const picker = page.getByRole("group", { name: "Lookback window" });
+    const week = await nodes();
+    await picker.getByRole("button", { name: "All", exact: true }).click();
+    await page.waitForTimeout(1700);
+    const all = await nodes();
+    console.log(`window: 7d ${week} topics, all ${all}`);
+    // The page header says "last 7 days"; the graph used to show all 483.
+    expect(all).toBeGreaterThan(week);
+    expect(week).toBeGreaterThan(0);
+  });
+
+  test("node labels stay distinct after truncation", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    const duplicates = await page.evaluate(() => {
+      const graph = (window as unknown as { __laocoon: { graph: any } }).__laocoon.graph;
+      const seen = new Map<string, number>();
+      graph.forEachNode((_k: string, a: Record<string, unknown>) =>
+        seen.set(String(a.label), (seen.get(String(a.label)) ?? 0) + 1),
+      );
+      return [...seen].filter(([, n]) => n > 1).map(([label]) => label);
+    });
+    // Cutting at a fixed width rendered "AI agent communication and auditing"
+    // and "...and discovery" as the same string.
+    expect(duplicates, `truncation collapsed distinct labels: ${duplicates.join(", ")}`).toEqual([]);
   });
 
   test("every design-review focus points at something on the page", async ({ page }) => {

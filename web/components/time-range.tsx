@@ -18,8 +18,13 @@ export const RANGES = [
   { days: 0, label: "All" },
 ] as const;
 
+/**
+ * Default 0 — all time — because that is what a component rendered *outside* a
+ * provider should show. The dashboard's provider sets 7 explicitly; a consumer
+ * with no provider above it must not inherit a window nobody chose.
+ */
 const Ctx = createContext<{ days: number; setDays: (d: number) => void }>({
-  days: 7,
+  days: 0,
   setDays: () => {},
 });
 

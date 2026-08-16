@@ -122,11 +122,10 @@ export default async function OverviewPage() {
 
           <Card className="mt-6" data-review="topics">
             <CardHeader>
-              <CardTitle className="text-base">Topics — all lists</CardTitle>
+              <CardTitle className="text-base">Topics</CardTitle>
               <CardDescription>
                 {tree ? (
                   <>
-                    {allTopics.length} topics across {allThreads.length} threads.{" "}
                     <strong>Click a topic</strong> to open it into its threads, then a
                     thread for its opening line and a link into the{" "}
                     <a
@@ -137,7 +136,9 @@ export default async function OverviewPage() {
                     >
                       mail archive
                     </a>
-                    . How the threshold was chosen, and why{" "}
+                    . Follows the lookback window above — {allTopics.length} topics
+                    across {allThreads.length} threads over the whole corpus. How the
+                    threshold was chosen, and why{" "}
                     {trees.filter((tr) => tr.topics.length === 0).map((tr) => tr.list_name).join(", ") ||
                       "a list"}{" "}
                     contributes no topics:{" "}

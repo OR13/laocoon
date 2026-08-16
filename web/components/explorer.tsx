@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { buildView, type GraphNode, type GraphSource } from "@/lib/graph-model";
+import { useTimeRange } from "@/components/time-range";
 import dynamic from "next/dynamic";
 
 // sigma touches WebGL2RenderingContext at import time, which does not exist
@@ -53,10 +54,24 @@ export function Explorer({
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [query, setQuery] = useState("");
 
-  const threadIds = useMemo(
-    () => (windowThreadIds ? new Set(windowThreadIds) : undefined),
-    [windowThreadIds],
-  );
+  // The page header says "last 7 days" and the graph was showing all 483 days
+  // of the corpus. The lookback picker now drives both.
+  const { days } = useTimeRange();
+  const threadIds = useMemo(() => {
+    if (windowThreadIds) return new Set(windowThreadIds);
+    if (days <= 0) return undefined;
+    // Anchored on the newest message in the corpus rather than on today, so a
+    // stale crawl shows the last week of data instead of an empty graph.
+    const newest = source.threads.reduce(
+      (latest, t) => (t.last_message_at && t.last_message_at > latest ? t.last_message_at : latest),
+      "",
+    );
+    if (!newest) return undefined;
+    const cutoff = new Date(Date.parse(newest) - days * 86_400_000).toISOString();
+    return new Set(
+      source.threads.filter((t) => (t.last_message_at ?? "") >= cutoff).map((t) => t.id),
+    );
+  }, [windowThreadIds, days, source.threads]);
 
   const view = useMemo(
     () =>
@@ -145,7 +160,8 @@ export function Explorer({
           onChange={(e) => setQuery(e.target.value)}
         />
         <span className="text-muted-foreground ml-auto text-xs">
-          {expandedTopics.size} of {source.topics.length} topics expanded · click a topic to open it
+          {threadIds ? `${threadIds.size} of ${source.threads.length} threads in window · ` : ""}
+          {view.nodes.filter((n) => n.tier === "topic").length} topics · click one to open it
         </span>
       </div>
 
