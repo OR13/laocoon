@@ -62,6 +62,13 @@
   --level-medium: #b8860b;
   --level-low: #a33b39;
   --level-none: #78766f;
+  /* The wash a node or edge falls to outside a selection.
+     Opaque, and close to the surface, rather than a translucent grey: sigma's
+     WebGL path parses rgba() but does not alpha-blend it, so a 22% grey
+     rendered at full strength. On white that read as correctly faded; on the
+     dark surface the same value was a glare of light-grey lines. */
+  --edge-rest: #e7e5e0;
+  --node-rest: #dcdad4;
   --l2-100: #fbd9c8; --l2-300: #f0995f; --l2-500: #c9531f; --l2-700: #7a2f0e;
   --chart-messages: #2a78d6;
   --chart-replies: #eb6834;
@@ -100,6 +107,9 @@
   --level-medium: #cfa03a;
   --level-low: #c65550;
   --level-none: #6e6b64;
+  /* Only a little lighter than --card, for the same reason. */
+  --edge-rest: #35342f;
+  --node-rest: #3f3e38;
   /* Dark steps of the same ramp: more colour still means more reputation. */
   --seq-100: #0d366b;
   --seq-250: #184f95;

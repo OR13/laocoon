@@ -29,10 +29,9 @@ import Graph from "graphology";
 import Sigma from "sigma";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import { EdgeRectangleProgram, NodeCircleProgram } from "sigma/rendering";
-import { NodeSquareProgram } from "@sigma/node-square";
 import { useTheme } from "next-themes";
 import { Pick, type PickOption } from "@/components/pick";
-import { NodeDiamondProgram } from "@/lib/node-diamond";
+import { drawThemedHover, NodeDiamondProgram, ThemedSquareProgram } from "@/lib/node-shapes";
 import { tidySubject } from "@/lib/graph-model";
 import {
   contributorLevel, CONTRIBUTOR_HELP, LEVEL_META, LEVELS, UTILITY_HELP,
@@ -41,36 +40,6 @@ import {
 
 const cssVar = (n: string) =>
   getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-
-/**
- * The label box drawn under the pointer.
- *
- * sigma's default paints a white rounded box and writes the label in whatever
- * `labelColor` says. In dark mode that is near-white ink on a white box, and
- * hovering a node made its own name disappear.
- */
-function drawHover(
-  context: CanvasRenderingContext2D,
-  data: { x: number; y: number; size: number; label: string | null },
-): void {
-  if (!data.label) return;
-  const size = 13;
-  context.font = `${size}px ui-sans-serif, system-ui, sans-serif`;
-  const width = context.measureText(data.label).width + 16;
-  const height = size + 12;
-  const x = data.x + data.size + 4;
-  const y = data.y - height / 2;
-  context.beginPath();
-  context.fillStyle = cssVar("--card") || "#ffffff";
-  context.strokeStyle = cssVar("--thread-line") || "#c3c2bb";
-  context.lineWidth = 1;
-  context.roundRect(x, y, width, height, 4);
-  context.fill();
-  context.stroke();
-  context.fillStyle = cssVar("--cy-ink") || "#1c1917";
-  context.textBaseline = "middle";
-  context.fillText(data.label, x + 8, data.y);
-}
 
 export type Kind = "person" | "thread" | "topic";
 export const KIND_SHAPE: Record<Kind, string> = {
@@ -195,7 +164,7 @@ export function ReplyNetwork({
       renderer = new Sigma(graph, boxRef.current, {
         nodeProgramClasses: {
           circle: NodeCircleProgram,
-          square: NodeSquareProgram,
+          square: ThemedSquareProgram,
           diamond: NodeDiamondProgram,
         },
         // sigma had only `line` and `arrow` registered, and `line` draws a
@@ -211,7 +180,7 @@ export function ReplyNetwork({
         minCameraRatio: 0.03,
         maxCameraRatio: 12,
         stagePadding: 50,
-        defaultDrawNodeHover: drawHover,
+        defaultDrawNodeHover: drawThemedHover,
       });
     } catch {
       setUnsupported(true);
@@ -395,11 +364,12 @@ export function ReplyNetwork({
     // Edges were what made the picture unreadable. At rest they are a thin
     // wash; inside a selection they take the accent and thicken, so the
     // subgraph is what stands out rather than what merely survives.
-    // 1,616 edges at any real weight is a solid mass — forced to full colour
-    // they fill the disc. At rest they are barely there on purpose; the web is
-    // context, and it is the selection that has to carry structure.
-    const restEdge = "rgba(140,138,132,0.22)";
-    const restNode = "rgba(140,138,132,0.22)";
+    // Opaque, theme-aware, and close to the surface. sigma parses rgba() but
+    // does not alpha-blend it, so a translucent grey rendered at full strength:
+    // invisible on white, and a mass of bright lines on the dark surface.
+    // 1,616 edges are context; the selection is what has to carry structure.
+    const restEdge = cssVar("--edge-rest") || "#e7e5e0";
+    const restNode = cssVar("--node-rest") || "#dcdad4";
     const accent = cssVar("--cy-primary") || "#2a78d6";
 
     renderer.setSetting("nodeReducer", (key, data) => {

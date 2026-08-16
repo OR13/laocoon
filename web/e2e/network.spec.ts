@@ -356,7 +356,7 @@ test.describe("reply network", () => {
     await expect(page.getByRole("heading", { name: "Who they exchange with" })).toBeVisible();
   });
 
-  test("hovering dims without turning the graph olive", async ({ page }) => {
+  test("no colour reaching the renderer is one WebGL cannot parse", async ({ page }) => {
     await page.goto("/index.html");
     await settle(page);
     await page.evaluate(() =>
@@ -388,9 +388,12 @@ test.describe("reply network", () => {
       );
       return [...colours];
     });
-    // "#8882" — four-digit hex with an alpha nibble — is not parsed by sigma's
-    // WebGL path, and every dimmed node came out olive.
-    expect(dimmed.some((c) => /^#[0-9a-f]{4}$/i.test(c))).toBe(false);
+    // Two failures of the same family, both silent: "#8882" — four-digit hex
+    // with an alpha nibble — is not parsed at all and rendered olive; and
+    // rgba() *is* parsed but not alpha-blended, so a 22% grey rendered at full
+    // strength, invisible on white and a glare of light lines on the dark
+    // surface. Every colour reaching a node is an opaque hex.
+    expect(dimmed.every((c) => /^#[0-9a-f]{6}$/i.test(c))).toBe(true);
   });
 
   test("reset view returns the camera to the default framing", async ({ page }) => {
