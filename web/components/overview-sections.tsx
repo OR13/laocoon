@@ -1,16 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
 import { Button } from "@/components/ui/button";
 import { RANGES } from "@/components/time-range";
-import { Headline, Section, SplitBar, ThreadList } from "@/components/sections";
+import { Section, ThreadList } from "@/components/sections";
+import { ScoreTrend } from "@/components/score-trend";
 import type { ListedThread } from "@/lib/threads";
 import dynamic from "next/dynamic";
 import {
-  BAND_META, BAND_ORDER, type NetworkEdge, type NetworkPerson, type NetworkThread,
+  contributorLevel, LEVEL_META, LEVELS, type NetworkEdge, type NetworkPerson, type DayRow, type NetworkThread, type NetworkTopic,
 } from "@/lib/scores";
 
 // sigma reads WebGL2RenderingContext at import time, absent during prerender.
@@ -59,6 +57,7 @@ export function OverviewSections({
   people,
   replies,
   networkThreads,
+  networkTopics,
   daily,
 }: {
   threads: ListedThread[];
@@ -66,7 +65,8 @@ export function OverviewSections({
   people: NetworkPerson[];
   replies: NetworkEdge[];
   networkThreads: NetworkThread[];
-  daily: { day: string; extensive: number; established: number; some: number; none: number }[];
+  networkTopics: NetworkTopic[];
+  daily: DayRow[];
 }) {
   const [days, setDays] = useState(30);
   const [list, setList] = useState("all");
@@ -84,13 +84,6 @@ export function OverviewSections({
   );
 
   const totalMessages = visible.reduce((n, t) => n + t.messages, 0);
-
-  // Messages per day by the sender's publication record. Same unit in every
-  // band, so the bands stack and the total is the day's traffic.
-  const trend = useMemo(() => {
-    const rows = days > 0 ? daily.slice(-days) : daily;
-    return rows.map((d) => ({ ...d, day: d.day.slice(5) }));
-  }, [daily, days]);
 
   return (
     <div className="pb-16">
@@ -143,7 +136,13 @@ export function OverviewSections({
           </a>
           . Drag a node to pull it out of the pile.
         </p>
-        <ReplyNetwork people={people} edges={replies} threads={networkThreads} height={640} />
+        <ReplyNetwork
+          people={people}
+          edges={replies}
+          threads={networkThreads}
+          topics={networkTopics}
+          height={660}
+        />
       </Section>
 
       <Section id="threads" question="Busiest threads">
@@ -153,38 +152,15 @@ export function OverviewSections({
         <ThreadList threads={busiest} empty="No threads in this window." limit={10} />
       </Section>
 
-      {trend.length > 1 && (
-        <Section id="trend" question="Messages per day, by the sender's contributor score">
-          <p className="text-muted-foreground mb-4 max-w-[76ch] text-sm">
-            Every message in the window, stacked by the sender&apos;s Laocoön contributor
-            score. The bands share one unit, so the height is the day&apos;s traffic and the
-            composition is who produced it.
+      {daily.length > 0 && (
+        <Section id="trend" question="Messages per day, by both Laocoön scores">
+          <p className="text-muted-foreground mb-4 max-w-[80ch] text-sm">
+            One row per list, because agent2agent carries about twelve times the traffic and
+            pooling them made the smaller list a rounding error. The left column is who sent
+            each message — the sender&apos;s contributor score — and the right is what they
+            sent into: the utility score of the thread it landed in.
           </p>
-          <div className="h-[220px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trend} margin={{ left: 4, right: 8, top: 4 }}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} />
-                <YAxis tickLine={false} axisLine={false} width={28} allowDecimals={false} />
-                <Tooltip />
-                <Legend />
-                {BAND_ORDER.slice().reverse().map((b) => (
-                  <Area
-                    key={b}
-                    dataKey={b}
-                    stackId="messages"
-                    type="monotone"
-                    strokeWidth={1}
-                    isAnimationActive={false}
-                    stroke={`var(${BAND_META[b].token})`}
-                    fill={`var(${BAND_META[b].token})`}
-                    fillOpacity={0.85}
-                    name={`Contributor score ${BAND_META[b].label}`}
-                  />
-                ))}
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          <ScoreTrend daily={daily} days={days} />
         </Section>
       )}
     </div>

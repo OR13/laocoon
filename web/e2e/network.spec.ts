@@ -142,18 +142,6 @@ test.describe("reply network", () => {
     expect(r.collidingLabels).toBe(0);
   });
 
-  test("the edge filter changes what is drawn", async ({ page }) => {
-    await page.goto("/index.html");
-    await settle(page);
-    const repeated = await read(page);
-    await page.getByRole("button", { name: "Every reply" }).click();
-    await page.waitForTimeout(1800);
-    const all = await read(page);
-    console.log(`filter: repeated ${repeated.nodes} people, every reply ${all.nodes}`);
-    // 444 of 603 pairs answered each other exactly once.
-    expect(all.nodes).toBeGreaterThan(repeated.nodes);
-  });
-
   test("clicking a person names them", async ({ page }) => {
     await page.goto("/index.html");
     await settle(page);
@@ -177,7 +165,7 @@ test.describe("reply network", () => {
     const box = (await canvas.boundingBox())!;
     await page.mouse.click(box.x + at.x, box.y + at.y);
     await page.waitForTimeout(400);
-    await expect(page.getByText("messages sent", { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("contributor", { exact: false }).first()).toBeVisible();
     await expect(page.getByText(String(at.name), { exact: false }).first()).toBeVisible();
   });
 
@@ -272,25 +260,91 @@ test.describe("reply network", () => {
     expect(Math.hypot(after.gx - at.gx, after.gy - at.gy)).toBeGreaterThan(0.5);
   });
 
-  test("the tier picker draws every thread and then the topics", async ({ page }) => {
+  test("every tier is drawn at once, in three shapes", async ({ page }) => {
     await page.goto("/index.html");
     await settle(page);
-    const nodes = () =>
-      page.evaluate(
-        () => (window as unknown as { __laocoon: { graph: any } }).__laocoon.graph.order,
+    const kinds = await page.evaluate(() => {
+      const { graph } = (window as unknown as { __laocoon: { graph: any } }).__laocoon;
+      const byKind: Record<string, Set<string>> = {};
+      graph.forEachNode((_k: string, a: Record<string, unknown>) => {
+        (byKind[String(a.kind)] ??= new Set()).add(String(a.type));
+      });
+      return Object.fromEntries(Object.entries(byKind).map(([k, v]) => [k, [...v]]));
+    });
+    console.log("kinds:", JSON.stringify(kinds));
+    // Caps and tier pickers kept answering "what is on this list" with "some".
+    expect(kinds.person).toEqual(["circle"]);
+    expect(kinds.thread).toEqual(["square"]);
+    expect(kinds.topic).toEqual(["diamond"]);
+  });
+
+  test("the contributor-score filter narrows the people", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    const people = () =>
+      page.evaluate(() => {
+        const { graph } = (window as unknown as { __laocoon: { graph: any } }).__laocoon;
+        let n = 0;
+        graph.forEachNode((_k: string, a: Record<string, unknown>) => {
+          if (a.kind === "person") n++;
+        });
+        return n;
+      });
+    const all = await people();
+    await page.getByRole("group", { name: "Contributor score" })
+      .getByRole("button", { name: "Low", exact: true })
+      .click();
+    await page.waitForTimeout(2500);
+    const withoutLow = await people();
+    console.log(`contributor filter: all ${all}, without low ${withoutLow}`);
+    expect(withoutLow).toBeLessThan(all);
+    expect(withoutLow).toBeGreaterThan(0);
+  });
+
+  test("selecting a node lifts its subgraph instead of hiding it", async ({ page }) => {
+    await page.goto("/index.html");
+    await settle(page);
+    await page.evaluate(() =>
+      document.querySelector("canvas")?.scrollIntoView({ block: "center" }),
+    );
+    await page.waitForTimeout(500);
+    const at = await page.evaluate(() => {
+      const { renderer, graph } = (window as unknown as { __laocoon: { renderer: any; graph: any } })
+        .__laocoon;
+      const key = graph
+        .nodes()
+        .filter((k: string) => graph.getNodeAttribute(k, "kind") === "person")
+        .sort(
+          (a: string, b: string) =>
+            graph.getNodeAttribute(b, "weight") - graph.getNodeAttribute(a, "weight"),
+        )[0];
+      const p = renderer.framedGraphToViewport(renderer.getNodeDisplayData(key));
+      const c = (renderer.getContainer() as HTMLElement).getBoundingClientRect();
+      return { x: c.left + p.x, y: c.top + p.y };
+    });
+    await page.mouse.click(at.x, at.y);
+    await page.waitForTimeout(900);
+    await expect(page.getByText("Connected to")).toBeVisible();
+    // The neighbourhood's edges take the accent rather than everything else
+    // simply disappearing, which is what made a selection unreadable before.
+    const accented = await page.evaluate(() => {
+      const { renderer, graph } = (window as unknown as { __laocoon: { renderer: any; graph: any } })
+        .__laocoon;
+      const reduce = renderer.getSetting("edgeReducer");
+      const colours = new Set<string>();
+      graph.forEachEdge((k: string, a: Record<string, unknown>) =>
+        colours.add(String(reduce(k, a).color)),
       );
-    const people = await nodes();
-    await page.getByRole("button", { name: "+ threads", exact: true }).click();
-    await page.waitForTimeout(2600);
-    const withThreads = await nodes();
-    await page.getByRole("button", { name: "+ topics", exact: true }).click();
-    await page.waitForTimeout(2600);
-    const withTopics = await nodes();
-    console.log(`tiers: people ${people}, +threads ${withThreads}, +topics ${withTopics}`);
-    // Uncapped at the operator's direction: a cap silently answers "what is on
-    // this list" with "the top sixty".
-    expect(withThreads).toBeGreaterThan(people + 200);
-    expect(withTopics).toBeGreaterThan(withThreads);
+      return [...colours];
+    });
+    expect(accented.length).toBeGreaterThan(1);
+  });
+
+  test("a topic profile page exists", async ({ page }) => {
+    await page.goto("/topics/topic-2/");
+    await page.waitForTimeout(900);
+    await expect(page.getByRole("heading", { name: "Utility of its threads" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Who took part" })).toBeVisible();
   });
 
   test("a person profile page exists and names their record", async ({ page }) => {
@@ -300,39 +354,6 @@ test.describe("reply network", () => {
     await expect(page.getByText("published RFCs", { exact: false })).toBeVisible();
     await expect(page.getByText("Laocoön utility score", { exact: false })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Who they exchange with" })).toBeVisible();
-  });
-
-  test("the record filters change the picture", async ({ page }) => {
-    await page.goto("/index.html");
-    await settle(page);
-    const nodes = () =>
-      page.evaluate(
-        () => (window as unknown as { __laocoon: { graph: any } }).__laocoon.graph.order,
-      );
-    const everyone = await nodes();
-    await page.getByRole("button", { name: "3 or more RFCs" }).click();
-    await page.waitForTimeout(1800);
-    const prolific = await nodes();
-    console.log(`filters: everyone ${everyone}, 3+ RFCs ${prolific}`);
-    expect(prolific).toBeLessThan(everyone);
-    expect(prolific).toBeGreaterThan(0);
-  });
-
-  test("every filter can be pressed without taking the page down", async ({ page }) => {
-    await page.goto("/index.html");
-    await settle(page);
-    // Rebuilding Sigma per filter threw "could not find a suitable program for
-    // node type circle" on the second construction and replaced the page with
-    // an error screen. One renderer now, repopulated in place.
-    for (const name of ["In the Datatracker", "Has an RFC", "3 or more RFCs", "Everyone"]) {
-      await page.getByRole("button", { name, exact: true }).click();
-      await page.waitForTimeout(1600);
-      const order = await page.evaluate(
-        () => (window as unknown as { __laocoon?: { graph?: { order: number } } }).__laocoon?.graph?.order ?? -1,
-      );
-      expect(order, `${name} left no graph`).toBeGreaterThan(0);
-    }
-    expect(errors, errors.join("\n")).toEqual([]);
   });
 
   test("hovering dims without turning the graph olive", async ({ page }) => {
@@ -370,43 +391,6 @@ test.describe("reply network", () => {
     // "#8882" — four-digit hex with an alpha nibble — is not parsed by sigma's
     // WebGL path, and every dimmed node came out olive.
     expect(dimmed.some((c) => /^#[0-9a-f]{4}$/i.test(c))).toBe(false);
-  });
-
-  test("a thread can be opened and names who is in it", async ({ page }) => {
-    await page.goto("/index.html");
-    await settle(page);
-    // The threads toggle became an additive tier picker: People / + threads /
-    // + topics, so every thread is drawn rather than a capped sixty.
-    await page.getByRole("button", { name: "+ threads", exact: true }).click();
-    await page.waitForTimeout(2600);
-    await page.evaluate(() =>
-      document.querySelector("canvas")?.scrollIntoView({ block: "center" }),
-    );
-    await page.waitForTimeout(400);
-    const at = await page.evaluate(() => {
-      const { renderer, graph } = (window as unknown as { __laocoon: { renderer: any; graph: any } })
-        .__laocoon;
-      const keys: string[] = [];
-      graph.forEachNode((k: string, a: Record<string, unknown>) => {
-        if (a.kind === "thread") keys.push(k);
-      });
-      keys.sort(
-        (a, b) =>
-          (graph.getNodeAttribute(b, "weight") as number) -
-          (graph.getNodeAttribute(a, "weight") as number),
-      );
-      const p = renderer.framedGraphToViewport(renderer.getNodeDisplayData(keys[0]!));
-      const c = (renderer.getContainer() as HTMLElement).getBoundingClientRect();
-      return { x: c.left + p.x, y: c.top + p.y, threads: keys.length };
-    });
-    expect(at.threads).toBeGreaterThan(0);
-    await page.mouse.click(at.x, at.y);
-    await page.waitForTimeout(600);
-    await expect(page.getByText("Who is in it")).toBeVisible();
-    await expect(page.getByRole("link", { name: /↗/ }).first()).toHaveAttribute(
-      "href",
-      /mailarchive\.ietf\.org/,
-    );
   });
 
   test("reset view returns the camera to the default framing", async ({ page }) => {

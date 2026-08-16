@@ -3,7 +3,7 @@ import { ExperimentalBanner, PUBLIC_NAV, SiteShell } from "@/components/site-she
 import { coverageLine, loadPublic } from "@/lib/data";
 import { tidySubject } from "@/lib/graph-model";
 import {
-  BAND_META, UTILITY_META, UTILITY_ORDER, type NetworkThread, type Utility,
+  contributorLevel, LEVEL_META, LEVELS, UTILITY_HELP, type Level, type NetworkThread,
 } from "@/lib/scores";
 
 /**
@@ -39,7 +39,7 @@ export default async function PersonPage({ params }: { params: Promise<{ slug: s
     .filter((t) => t.participants.includes(person.id))
     .sort((a, b) => b.messages - a.messages);
 
-  const counts = { high: 0, medium: 0, low: 0 } as Record<Utility, number>;
+  const counts = { high: 0, medium: 0, low: 0 } as Record<Level, number>;
   for (const t of own) counts[t.utility]++;
 
   const topics = [
@@ -73,7 +73,7 @@ export default async function PersonPage({ params }: { params: Promise<{ slug: s
       <div className="text-muted-foreground tnum mt-0.5 text-xs">
         {t.messages} message{t.messages === 1 ? "" : "s"} · {t.participants.length} participant
         {t.participants.length === 1 ? "" : "s"} ·{" "}
-        <span title={UTILITY_META[t.utility].help}>{UTILITY_META[t.utility].label}</span> ·{" "}
+        <span title={UTILITY_HELP[t.utility]}>{LEVEL_META[t.utility].label}</span> ·{" "}
         {Math.round(t.top_two_share * 100)}% from the busiest two
         {t.quiet_for_days !== null && ` · quiet ${t.quiet_for_days}d`}
         {t.topic_label && (
@@ -119,9 +119,9 @@ export default async function PersonPage({ params }: { params: Promise<{ slug: s
             <span className="inline-flex items-center gap-1.5">
               <i
                 className="inline-block size-2.5 rounded-full"
-                style={{ background: `var(${BAND_META[person.band].token})` }}
+                style={{ background: `var(${LEVEL_META[contributorLevel(person.score)].token})` }}
               />
-              {BAND_META[person.band].label}
+              {LEVEL_META[contributorLevel(person.score)].label}
             </span>{" "}
             —{" "}
             <a className="text-primary underline" href="/methodology/#scores">
@@ -143,8 +143,8 @@ export default async function PersonPage({ params }: { params: Promise<{ slug: s
           {own.length} thread{own.length === 1 ? "" : "s"}
           {topics.length > 0 && ` across ${topics.length} topic${topics.length === 1 ? "" : "s"}`}
           {" — "}
-          {UTILITY_ORDER.filter((k) => counts[k] > 0)
-            .map((k) => `${counts[k]} ${UTILITY_META[k].label.toLowerCase()}`)
+          {LEVELS.filter((k) => counts[k] > 0)
+            .map((k) => `${counts[k]} ${LEVEL_META[k].label.toLowerCase()}`)
             .join(", ")}{" "}
           by Laocoön utility score.
         </p>
@@ -171,7 +171,7 @@ export default async function PersonPage({ params }: { params: Promise<{ slug: s
               <li key={other!.id} className="flex items-center gap-2 py-2 text-sm">
                 <i
                   className="inline-block size-2.5 shrink-0 rounded-full"
-                  style={{ background: `var(${BAND_META[other!.band].token})` }}
+                  style={{ background: `var(${LEVEL_META[contributorLevel(other!.score)].token})` }}
                 />
                 <a className="hover:text-primary hover:underline" href={`/people/${other!.id}/`}>
                   {other!.name}

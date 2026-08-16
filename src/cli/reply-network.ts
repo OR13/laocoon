@@ -30,7 +30,7 @@ import type { Event, MessageObserved, PrivateEvent, ReplyGraph } from "../schema
 import { JsonlEventStore } from "../store/jsonl-store.ts";
 import { assertPublishableArtifact } from "../site/publishable.ts";
 import { archiveMessageUrl } from "../lib/archive.ts";
-import { bandOf, contributorScore, type ContributorScore } from "../score/contributor.ts";
+import { contributorScore, type ContributorScore } from "../score/contributor.ts";
 import { utilityOf } from "../score/utility.ts";
 import { JsonlEventStore as PrivateStore } from "../store/jsonl-store.ts";
 import { ARTIFACTS_DIR, EVENTS_DIR, PRIVATE_DIR } from "../lib/paths.ts";
@@ -217,7 +217,6 @@ const nodes = [...messages.keys()].map((id) => {
   name: labelFor(id),
   /** 0-100 from published RFCs, adopted drafts and roles. See seed/record-score.ts. */
   score: record?.score ?? 0,
-  band: bandOf(record?.score ?? 0),
   rfcs: record?.rfcs ?? 0,
   adopted_drafts: record?.adopted_drafts ?? 0,
   chairs_now: record?.chairs_now ?? false,
@@ -240,31 +239,6 @@ nodes.sort((a, b) => b.messages - a.messages || a.id.localeCompare(b.id));
  * continuous score says the same thing about who is carrying the traffic
  * without sorting anyone into the anointed and the rest.
  */
-type DayCounts = { extensive: number; established: number; some: number; none: number };
-const daily = new Map<string, DayCounts>();
-const bandOfSender = new Map<string, keyof DayCounts>();
-for (const id of messages.keys()) bandOfSender.set(id, bandOf(scoreOf(id)?.score ?? 0) as keyof DayCounts);
-for (const n of graph.nodes) {
-  if (!n.sent_at) continue;
-  const day = n.sent_at.slice(0, 10);
-  const row: DayCounts = daily.get(day) ?? { extensive: 0, established: 0, some: 0, none: 0 };
-  row[(bandOfSender.get(n.sender_id) ?? "none") as keyof DayCounts] += 1;
-  daily.set(day, row);
-}
-// Days with no traffic are emitted as zeroes: a gap in a trend line has to
-// read as "nothing happened", not as "not measured".
-const days: ({ day: string } & DayCounts)[] = [];
-const sortedDays = [...daily.keys()].sort();
-if (sortedDays.length > 0) {
-  const cursor = new Date(`${sortedDays[0]!}T00:00:00Z`);
-  const last = new Date(`${sortedDays[sortedDays.length - 1]!}T00:00:00Z`);
-  while (cursor <= last) {
-    const day = cursor.toISOString().slice(0, 10);
-    const row: DayCounts = daily.get(day) ?? { extensive: 0, established: 0, some: 0, none: 0 };
-    days.push({ day, ...row });
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-}
 
 /**
  * Threads, joined to the people in them.
@@ -358,6 +332,84 @@ const threadRows = graph.threads
   })
   .sort((a, b) => b.messages - a.messages);
 
+/** Topics, rolled up from the threads in them. Their own tier and own pages. */
+const topicRows = [...topicOfThread.values()]
+  .filter((t, i, all) => all.findIndex((x) => x.id === t.id) === i)
+  .map((topic) => {
+    const own = threadRows.filter((t) => t.topic_id === topic.id);
+    const participants = [...new Set(own.flatMap((t) => t.participants))];
+    const utility = { high: 0, medium: 0, low: 0 } as Record<string, number>;
+    for (const t of own) utility[t.utility] = (utility[t.utility] ?? 0) + 1;
+    const dates = own.map((t) => t.last_message_at).filter(Boolean) as string[];
+    const starts = own.map((t) => t.started_at).filter(Boolean) as string[];
+    return {
+      id: topic.id,
+      label: topic.label,
+      lists: [...new Set(own.map((t) => t.list_name))].sort(),
+      threads: own.map((t) => t.id),
+      messages: own.reduce((n, t) => n + t.messages, 0),
+      participants,
+      utility,
+      top_contributor: own.reduce((m, t) => Math.max(m, t.top_contributor), 0),
+      started_at: starts.length ? starts.sort()[0]! : null,
+      last_message_at: dates.length ? dates.sort().at(-1)! : null,
+    };
+  })
+  .filter((t) => t.threads.length > 0)
+  .sort((a, b) => b.messages - a.messages);
+
+/**
+ * One row per day per list, broken down two ways.
+ *
+ * Per list because the two are a factor of twelve apart in volume and pooling
+ * them hid that agentproto and agent2agent behave differently. Two breakdowns
+ * because the operator asked for both scores over time: who is sending, and
+ * what the threads they are sending into are like.
+ */
+type Levels = { high: number; medium: number; low: number };
+type DayRow = { day: string; list_name: string; contributor: Levels; utility: Levels };
+const emptyLevels = (): Levels => ({ high: 0, medium: 0, low: 0 });
+const levelOfScore = (score: number): keyof Levels =>
+  score >= 70 ? "high" : score >= 35 ? "medium" : "low";
+const daily = new Map<string, DayRow>();
+const levelOfSender = new Map<string, keyof Levels>();
+for (const id of messages.keys()) levelOfSender.set(id, levelOfScore(scoreOf(id)?.score ?? 0));
+const utilityOfThread = new Map(threadRows.map((t) => [t.id, t.utility]));
+for (const n of graph.nodes) {
+  if (!n.sent_at) continue;
+  const day = n.sent_at.slice(0, 10);
+  const list = listOf.get(n.thread_id) ?? "";
+  const key = `${day} ${list}`;
+  const row =
+    daily.get(key) ?? { day, list_name: list, contributor: emptyLevels(), utility: emptyLevels() };
+  row.contributor[levelOfSender.get(n.sender_id) ?? "low"] += 1;
+  row.utility[(utilityOfThread.get(n.thread_id) ?? "low") as keyof Levels] += 1;
+  daily.set(key, row);
+}
+// Days with no traffic are emitted as zeroes: a gap in a trend line has to
+// read as "nothing happened", not as "not measured".
+const days: DayRow[] = [];
+const allDays = [...new Set([...daily.values()].map((r) => r.day))].sort();
+const lists = [...new Set([...daily.values()].map((r) => r.list_name))].sort();
+if (allDays.length > 0) {
+  const cursor = new Date(`${allDays[0]!}T00:00:00Z`);
+  const last = new Date(`${allDays[allDays.length - 1]!}T00:00:00Z`);
+  while (cursor <= last) {
+    const day = cursor.toISOString().slice(0, 10);
+    for (const list of lists) {
+      days.push(
+        daily.get(`${day} ${list}`) ?? {
+          day,
+          list_name: list,
+          contributor: emptyLevels(),
+          utility: emptyLevels(),
+        },
+      );
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+}
+
 const artifact = {
   schema_version: "1.0.0",
   derived: true,
@@ -374,6 +426,7 @@ const artifact = {
     "reputation this system computes is a different thing and stays local.",
   self_replies_dropped: selfReplies,
   daily: days,
+  topics: topicRows,
   threads: threadRows,
   nodes,
   edges: [...pairs.values()].sort((a, b) => b.replies - a.replies),
@@ -384,7 +437,10 @@ assertPublishableArtifact(out, artifact);
 await Bun.write(out, JSON.stringify(artifact, null, 2) + "\n");
 
 const counts: Record<string, number> = {};
-for (const n of nodes) counts[n.band] = (counts[n.band] ?? 0) + 1;
+for (const n of nodes) {
+  const level = levelOfScore(n.score);
+  counts[level] = (counts[level] ?? 0) + 1;
+}
 console.log(
   JSON.stringify(
     { out, people: nodes.length, edges: artifact.edges.length, selfReplies, counts },

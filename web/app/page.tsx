@@ -70,6 +70,7 @@ export default async function OverviewPage() {
         people={network?.nodes ?? []}
         replies={network?.edges ?? []}
         networkThreads={network?.threads ?? []}
+        networkTopics={network?.topics ?? []}
         daily={network?.daily ?? []}
       />
     </SiteShell>
