@@ -49,6 +49,25 @@
      novelty. Two families only — a third list needs a re-check, because past
      three categorical hues an all-pairs view cannot clear the CVD floors. */
   --l1-100: #cde2fb; --l1-300: #6da7ec; --l1-500: #256abf; --l1-700: #0d366b;
+
+  /* Engagement from accounts holding community-conferred standing — the one
+     thing the map is asked to show. Three states, not a ramp: "nobody is
+     here", "somebody is here", "somebody is replying" are different
+     situations. Grey is the absence, so a large grey mark reads as volume
+     without engagement rather than as a low score on something.
+
+     Stepped against scripts/validate_palette.js, not by eye. A first attempt
+     (#256abf/#9ec5f4/#b9b7b1) failed at ΔE 9.3 between "present" and "none" —
+     below the normal-vision floor of 15, so two of the three states were hard
+     to tell apart with full colour vision. These clear it: CVD 19.0, normal
+     19.9. The validator still fails the neutral on its chroma floor, which is
+     correct for a categorical palette and wrong here: grey IS the absence, and
+     the check is scoped to palettes where every slot must read as a hue. The
+     sub-3:1 contrast warning on the mid step is answered by the legend and the
+     detail panel, both of which name the state in words. */
+  --eng-answering: #184f95;
+  --eng-present: #6da7ec;
+  --eng-none: #78766f;
   --l2-100: #fbd9c8; --l2-300: #f0995f; --l2-500: #c9531f; --l2-700: #7a2f0e;
   --chart-messages: #2a78d6;
   --chart-replies: #eb6834;
@@ -80,6 +99,11 @@
   --ring: oklch(0.65 0.15 254);
   --warn: oklch(0.78 0.11 78);
   --warn-bg: oklch(0.26 0.04 70);
+  /* Engagement, dark steps: CVD 16.6, normal-vision 17.7. Not a flip of the
+     light values — those collapsed to ΔE 11.8 against this surface. */
+  --eng-answering: #9ec5f4;
+  --eng-present: #4d90d9;
+  --eng-none: #6e6b64;
   /* Dark steps of the same ramp: more colour still means more reputation. */
   --seq-100: #0d366b;
   --seq-250: #184f95;

@@ -1,32 +1,26 @@
 {
-  "cycle": "2026-08-16-explorable",
+  "cycle": "2026-08-16-network",
   "pending": true,
-  "title": "Presentation pass: explorable tables, computed language measures",
+  "title": "One picture: who replies to whom",
   "summary": "",
   "focus": [
     {
-      "id": "language",
-      "target": "[data-review='language']",
-      "title": "17% interchangeable, 45% cite nothing",
-      "ask": "Two new measures, both computed rather than judged. 17% of agent2agent messages sit no closer in vocabulary to their own thread than to any other; 45% cite nothing checkable. Is this the picture of the list you were describing, or is it measuring something adjacent to it?"
+      "id": "network",
+      "target": "[data-review='network']",
+      "title": "81 people, 120 pairs who answered each other more than once",
+      "ask": "The graph is back, as the reply network among people — the form a node-link diagram earns, since an edge here is a real relationship. Names are on it. Dark blue holds standing, light blue has a Datatracker record, grey has none. Is this the one picture, or is it still not the thing you need to see?"
     },
     {
-      "id": "contribution",
-      "target": "[data-review='contribution']",
-      "title": "Only 2 of 7 properties replicate across both lists",
-      "ask": "The callout is now derived from the table rather than written beside it. Asking a question and already having standing are the only properties that clear 0.15 on both lists in the same direction. Everything else moves on one list only. Does that read as the finding, or as hedging?"
+      "id": "network",
+      "target": "[data-review='network']",
+      "title": "The three busiest accounts hold no standing",
+      "ask": "Iman Schrock (110 messages), Chris Hood (71) and Muhammad Usama Sardar (41) all resolve to a Datatracker person but match no standing clause. Adrian Farrel at 28 is the first with standing. Does that match how the list feels to read?"
     },
     {
-      "id": "topics",
-      "target": "[data-review='topics']",
-      "title": "7 of 45 topics carry a name at once",
-      "ask": "Labels are now placed greedily so none overlap, which means most topics are unnamed until you hover or zoom in. Is that the right trade against the previous state, where 28 of 45 names printed on top of each other?"
-    },
-    {
-      "id": "findings",
-      "target": "[data-review='findings']",
-      "title": "301 of 392 threads are too short to measure",
-      "ask": "Thread-level language measures are withheld below four messages, because a two-message thread's similarity to its own thread is one comparison and it dominated the sort. That leaves 91 threads with those columns. Is a four-message floor right, or does it hide the short exchanges you most want to see?"
+      "id": "share",
+      "target": "[data-review='share']",
+      "title": "444 of 603 pairs replied to each other exactly once",
+      "ask": "Drawing every one of those put 204 people in a single unreadable disc, so the default shows only pairs who answered each other twice or more. Is a repeated exchange the right definition of a relationship here, or does one reply already count?"
     }
   ]
 }

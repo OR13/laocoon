@@ -32,7 +32,8 @@
     "test:e2e": "playwright test --config web/playwright.config.ts",
     "concreteness": "bun run src/cli/concreteness.ts",
     "value-probe": "bun run src/cli/value-probe.ts",
-    "moderation": "bun run src/cli/moderation.ts"
+    "moderation": "bun run src/cli/moderation.ts",
+    "reply-network": "bun run src/cli/reply-network.ts"
   },
   "dependencies": {
     "ajv": "^8.17.1",

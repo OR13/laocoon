@@ -310,7 +310,25 @@ export interface ThreadLanguage {
   }[];
 }
 
+/** Who replies to whom, named. See src/cli/reply-network.ts on why names. */
+export interface ReplyNetwork {
+  publication: string;
+  lists: string[];
+  nodes: {
+    id: string;
+    name: string;
+    standing: "standing" | "record" | "no_record";
+    messages: number;
+    replies_sent: number;
+    replies_received: number;
+    lists: string[];
+    first_seen: string | null;
+  }[];
+  edges: { source: string; target: string; replies: number }[];
+}
+
 export interface PublicData {
+  network: ReplyNetwork | null;
   measures: ThreadMeasure[];
   language: ThreadLanguage[];
   forecasts: Forecast[];
@@ -471,7 +489,21 @@ export async function loadPublic(): Promise<PublicData> {
     }
   }
 
+  let network: ReplyNetwork | null = null;
+  try {
+    const raw = JSON.parse(
+      await readFile(join(ARTIFACTS_DIR, "reply-network.json"), "utf8"),
+    ) as ReplyNetwork;
+    if (raw.publication !== "aggregate_public") {
+      throw new Error(`refusing reply-network.json: publication is ${raw.publication}`);
+    }
+    network = raw;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("refusing")) throw error;
+  }
+
   return {
+    network,
     contribution,
     language,
     health,
