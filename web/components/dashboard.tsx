@@ -175,11 +175,11 @@ export function Dashboard({ activity }: { activity: Activity }) {
         <Card data-review="volume">
           <CardHeader>
             <CardTitle className="text-base">Volume — all lists</CardTitle>
+            {/* A caption says what the chart shows. The argument about whether
+                volume deserves suspicion is a claim, and claims belong where
+                they can be checked — see /methodology. */}
             <CardDescription>
               Messages and replies per day, summed across {activity.lists.length} lists.
-              Volume is the thing this project treats with suspicion, not the thing it
-              rewards — on the larger list it is also the best predictor of what happens
-              next, which nothing model-derived has yet beaten.
             </CardDescription>
           </CardHeader>
           <CardContent>

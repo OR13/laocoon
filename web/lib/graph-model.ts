@@ -19,14 +19,39 @@
 
 export type Tier = "topic" | "thread" | "message" | "person";
 
-/** Subject without the list tag or reply prefixes — a node label, not a header. */
+/**
+ * Subject without the list tag, reply prefixes or trailing rename note.
+ *
+ * The reply prefixes on these lists are not only `Re:`. A single agent2agent
+ * thread carries `Re:`, the Chinese `回复:` and `回复：` with a fullwidth colon,
+ * and stacks of both — one subject reads `Re: 回复：Re: 回复：Re: …` before the
+ * words start. Stripping only the ASCII forms left labels that were mostly
+ * punctuation.
+ */
+const LIST_TAG = /^\s*(\[[^\]]+\]\s*)+/;
+// ： is the fullwidth colon. Written as an escape because it survives a
+// copy-paste that an editor or a shell may quietly normalise to ASCII — which
+// is exactly what happened the first time, leaving a class of two ASCII colons
+// and every CJK prefix untouched.
+const REPLY_PREFIX =
+  /^\s*(?:(?:Re|RE|Fwd|FWD|FW|AW|SV|VS|回复|回覆|答复|轉發|转发)\s*[:：]\s*)+/;
+/** `Charter options (Was: Re: the old subject)` — the rename, not the subject. */
+const WAS_SUFFIX = /\s*\((?:Was|was)\s*:[\s\S]*\)\s*$/;
+
+export function tidySubject(subject: string): string {
+  let text = subject.replace(LIST_TAG, "");
+  // Prefixes interleave, so strip repeatedly rather than once.
+  for (let i = 0; i < 8; i++) {
+    const next = text.replace(REPLY_PREFIX, "");
+    if (next === text) break;
+    text = next;
+  }
+  return text.replace(WAS_SUFFIX, "").trim() || subject.trim();
+}
+
+/** Tidied and cut to a node label's width. */
 export function cleanSubject(subject: string): string {
-  return (
-    subject
-      .replace(/^\s*(\[[^\]]+\]\s*)+/g, "")
-      .replace(/^((Re|RE|Fwd|FWD|AW)\s*:\s*)+/g, "")
-      .trim() || subject
-  ).slice(0, 46);
+  return tidySubject(subject).slice(0, 46);
 }
 
 export interface GraphNode {

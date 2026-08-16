@@ -23,6 +23,7 @@ import { concreteness, type Concreteness } from "../classify/concreteness.ts";
 import { distinctiveness, MIN_TERMS, type Document } from "../classify/distinctiveness.ts";
 import { BodyCache } from "../ingest/body-cache.ts";
 import { ARTIFACTS_DIR, EVENTS_DIR, PRIVATE_DIR } from "../lib/paths.ts";
+import { assertPublishableArtifact } from "../site/publishable.ts";
 
 const { values } = parseArgs({
   options: { lists: { type: "string", default: "agentproto,agent2agent" } },
@@ -122,6 +123,25 @@ for (const list of lists) {
 
 const generatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
+/**
+ * Thread-level medians are withheld below this many messages.
+ *
+ * Matches `MIN_MESSAGES` in `laocoon.health` for the same reason: a measure
+ * averaged over one or two values is not a measure, and publishing it invites
+ * a reader to sort by it and read the noise as a finding.
+ */
+const MIN_THREAD_MESSAGES = 4;
+/** ...and at least this many of them must actually have scored. */
+const MIN_SCORED = 3;
+
+function medianOf(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  const value = sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+  return Number(value.toFixed(4));
+}
+
 function share(subset: Row[], predicate: (r: Row) => boolean): number {
   return subset.length ? Number((subset.filter(predicate).length / subset.length).toFixed(4)) : 0;
 }
@@ -165,6 +185,73 @@ for (const list of lists) {
       messages: own.filter((r) => r.referent_kinds === k).length,
     })),
   };
+
+  // Per-thread rollup, publishable. Per-message rows carry a sender_id and
+  // stay private (PROBLEM.md section 7); a thread-level median names nobody
+  // and is the same class of figure as reach or uptake.
+  const byThread = new Map<string, Row[]>();
+  for (const row of own) {
+    if (!row.thread_id) continue;
+    const group = byThread.get(row.thread_id) ?? [];
+    group.push(row);
+    byThread.set(row.thread_id, group);
+  }
+  const threadRows = [...byThread]
+    .map(([threadId, group]) => {
+      const scored = group.filter((r) => r.distinctiveness !== null);
+      const long = group.filter((r) => r.words >= 40);
+      // A two-message thread's "similarity to its own thread" is one pairwise
+      // comparison, and it lands near the top of any ranking by chance. Sorting
+      // the published table by this column made that visible immediately:
+      // every high scorer was a thread of two. Below the floor the value is
+      // withheld rather than shown small, because a reader cannot tell a noisy
+      // 0.94 from a real one.
+      const enough = group.length >= MIN_THREAD_MESSAGES;
+      return {
+        thread_id: threadId,
+        messages: group.length,
+        median_referent_kinds: medianOf(group.map((r) => r.referent_kinds)),
+        median_distinctiveness:
+          enough && scored.length >= MIN_SCORED
+            ? medianOf(scored.map((r) => r.distinctiveness!))
+            : null,
+        share_offering_nothing_checkable:
+          enough && long.length >= MIN_SCORED
+            ? Number((long.filter((r) => r.offers_nothing_checkable).length / long.length).toFixed(3))
+            : null,
+        share_asking_a_question:
+          enough
+            ? Number((group.filter((r) => r.questions > 0).length / group.length).toFixed(3))
+            : null,
+        share_contending:
+          enough
+            ? Number((group.filter((r) => r.contends > 0).length / group.length).toFixed(3))
+            : null,
+      };
+    })
+    .sort((a, b) => b.messages - a.messages);
+
+  const publicOut = join(ARTIFACTS_DIR, `thread-language-${list}.json`);
+  const scoredThreads = threadRows.filter((t) => t.median_distinctiveness !== null).length;
+  const publicArtifact = {
+    schema_version: "1.0.0",
+    derived: true,
+    publication: "aggregate_public" as const,
+    generated_at: generatedAt,
+    generator: "laocoon.concreteness/0.2.0",
+    list_name: list,
+    distribution: {
+      ...distribution,
+      threads_total: threadRows.length,
+      // Stated, so a reader can see how much of the corpus the thread-level
+      // columns actually cover rather than assuming it is all of it.
+      threads_above_message_floor: scoredThreads,
+      message_floor: MIN_THREAD_MESSAGES,
+    },
+    threads: threadRows,
+  };
+  assertPublishableArtifact(publicOut, publicArtifact);
+  await Bun.write(publicOut, JSON.stringify(publicArtifact, null, 2) + "\n");
 
   const out = join(PRIVATE_DIR, "artifacts", `concreteness-${list}.json`);
   await Bun.write(

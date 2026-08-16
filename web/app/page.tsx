@@ -5,12 +5,13 @@ import { Dashboard } from "@/components/dashboard";
 import { Explorer } from "@/components/explorer";
 import type { GraphSource } from "@/lib/graph-model";
 import { archiveListUrl, archiveMessageUrl } from "@/lib/archive";
-import { loadPublic, loadReview } from "@/lib/data";
+import { coverageLine, loadPublic, loadReview } from "@/lib/data";
 import { ReviewPanel } from "@/components/review-panel";
 import { ContributionCard } from "@/components/contribution-card";
+import { LanguageCard } from "@/components/language-card";
 
 export default async function OverviewPage() {
-  const { activity, windows, structure, forecasts, measures, trees, health, contribution } =
+  const { activity, windows, structure, forecasts, measures, trees, health, contribution, language } =
     await loadPublic();
   const review = await loadReview();
 
@@ -46,7 +47,11 @@ export default async function OverviewPage() {
   const defined = baseline7.map((f) => f.spearman).filter((s): s is number => s !== null);
   const medianBaseline =
     defined.length > 0 ? [...defined].sort((a, b) => a - b)[Math.floor(defined.length / 2)]! : null;
-  const unmeasured = measures.filter((m) => m.substantive_reply_ratio === null).length;
+  // The larger corpus leads the headline figure: a share over 106 messages and
+  // a share over 1,233 are not the same kind of number.
+  const biggestList = [...language].sort(
+    (a, b) => b.distribution.messages - a.distribution.messages,
+  )[0];
 
   const allTopics = trees.flatMap((tr) =>
     tr.topics.map((topic) => ({ ...topic, list_name: tr.list_name })),
@@ -100,11 +105,7 @@ export default async function OverviewPage() {
       banner={<ExperimentalBanner />}
       footer={
         <>
-          <p>
-            {last
-              ? `Coverage: ${last.list_name}, ${last.mailbox_total} messages in the mailbox as of ${last.completed_at}, ${last.failures.length} fetch failures.`
-              : "Coverage: no crawl window recorded."}
-          </p>
+          <p>{coverageLine(windows)}</p>
           <p className="mt-1">
             Every figure derives from an event committed to the repository. If one is
             wrong, open an issue against it. Per-person scores are not published and do
@@ -125,14 +126,9 @@ export default async function OverviewPage() {
               <CardDescription>
                 {tree ? (
                   <>
-                    {allTopics.length} topics across {allThreads.length} threads from{" "}
-                    {trees.length} lists, with{" "}
-                    {trees.reduce((n, tr) => n + tr.unassigned_threads.length, 0)} left
-                    unassigned rather than forced into one.{" "}
-                    {trees.filter((tr) => tr.topics.length === 0).map((tr) => tr.list_name).join(", ") &&
-                      `${trees.filter((tr) => tr.topics.length === 0).map((tr) => tr.list_name).join(", ")} contributes no topics: its threads are one conversation and the blob cap refuses to split them. `}
-                    Clusters are laid out apart; click a topic to expand it into its
-                    threads, then a thread for its opening line and a link into the{" "}
+                    {allTopics.length} topics across {allThreads.length} threads.{" "}
+                    <strong>Click a topic</strong> to open it into its threads, then a
+                    thread for its opening line and a link into the{" "}
                     <a
                       className="text-primary underline"
                       href={archiveListUrl(tree.list_name)}
@@ -141,10 +137,14 @@ export default async function OverviewPage() {
                     >
                       mail archive
                     </a>
-                    . Threshold {tree.chosen_threshold} was chosen by held-out prediction
-                    (ρ {tree.holdout_spearman}), beating subject matching (
-                    {tree.calibration.subject_baseline_holdout}) and a single cluster (
-                    {tree.calibration.single_cluster_holdout}).
+                    . How the threshold was chosen, and why{" "}
+                    {trees.filter((tr) => tr.topics.length === 0).map((tr) => tr.list_name).join(", ") ||
+                      "a list"}{" "}
+                    contributes no topics:{" "}
+                    <a className="text-primary underline" href="/methodology/">
+                      methodology
+                    </a>
+                    .
                   </>
                 ) : (
                   "No usable topic partition yet."
@@ -168,9 +168,8 @@ export default async function OverviewPage() {
         </p>
       )}
 
-      {contribution.map((c) => (
-        <ContributionCard key={c.list_name} data={c} />
-      ))}
+      <ContributionCard data={contribution} />
+      <LanguageCard data={language} />
 
       {health.length > 0 && (
         <Card className="mt-6" data-review="axes">
@@ -216,13 +215,10 @@ export default async function OverviewPage() {
               <strong className="text-[var(--warn)]">
                 A health verdict was here and has been removed.
               </strong>{" "}
-              An open/narrow/closed label built from these three axes was tested the way
-              everything else here is tested — does it predict engagement over the next
-              horizon — and it inverted. Threads it called &ldquo;closed&rdquo; were the
-              most likely to continue: 80% against 7.7% on agentproto, 28.6% against 2.1%
-              on agent2agent. Reach is an inverse proxy for a sustained argument. The
-              axes are kept because they are measurements; the verdict on top of them was
-              wrong.
+              It called threads open, narrow or closed, and on the holdout it inverted:
+              the ones it called closed were the most likely to continue, 80% against 7.7%
+              on agentproto. The axes are measurements and are kept; the verdict on top of
+              them was wrong.
             </div>
           </CardContent>
         </Card>
@@ -255,16 +251,26 @@ export default async function OverviewPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Substance measure</CardTitle>
+            <CardTitle className="text-base">Interchangeable messages</CardTitle>
           </CardHeader>
           <CardContent className="text-muted-foreground space-y-2 text-sm">
-            <p className="text-foreground tnum text-2xl font-semibold">no variance</p>
+            <p className="text-foreground tnum text-2xl font-semibold">
+              {biggestList
+                ? `${Math.round(biggestList.distribution.not_more_like_own_thread * 100)}%`
+                : "not measured"}
+            </p>
             <p>
-              The classifier judged {measures.reduce((n, m) => n + m.substantive_replies, 0)}{" "}
-              replies substantive and{" "}
-              {measures.reduce((n, m) => n + m.hollow_replies, 0)} hollow. A measure with no
-              variance carries no information, so it currently adds nothing over counting
-              replies. {unmeasured} threads have no substance measure at all.
+              {biggestList ? (
+                <>
+                  Of {biggestList.distribution.messages} messages on{" "}
+                  {biggestList.list_name}, that share sits no closer in vocabulary to its
+                  own thread than to the rest of the list. A local model asked the same
+                  question answered &ldquo;no&rdquo; for every message on both lists, so
+                  it is computed instead.
+                </>
+              ) : (
+                <>Run <code>bun run concreteness</code> to measure this.</>
+              )}
             </p>
           </CardContent>
         </Card>

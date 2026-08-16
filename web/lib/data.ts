@@ -55,6 +55,20 @@ export interface ThreadMeasure {
 }
 
 export interface Forecast {
+  /**
+   * Which list this evaluation is about.
+   *
+   * It was missing from this interface while being present in the event, so
+   * every consumer keyed on `origin_at` alone — and 179 origins occur on both
+   * lists, which meant a forecaster on one list was being scored against the
+   * other list's baseline.
+   *
+   * Optional because 761 of the 1,537 recorded evaluations predate the field.
+   * Events are immutable and there is no way to recover which list those ran
+   * against, so they are excluded from per-list figures and counted rather
+   * than guessed at.
+   */
+  list_name?: string;
   origin_at: string;
   horizon_days: number;
   forecaster: string;
@@ -266,8 +280,39 @@ export interface ContributionMessage {
   thread_messages: number;
 }
 
+/**
+ * Per-thread language measures: how concrete a thread's messages are, and how
+ * specific they are to the conversation they are in. Thread-level medians, so
+ * the artifact names nobody — the per-message rows behind these carry a sender
+ * and stay under `private/`.
+ */
+export interface ThreadLanguage {
+  publication: string;
+  list_name: string;
+  distribution: {
+    messages: number;
+    with_any_referent: number;
+    offers_nothing_checkable: number;
+    not_more_like_own_thread: number;
+    threads_total: number;
+    threads_above_message_floor: number;
+    message_floor: number;
+    distinctiveness_percentiles: { p10: number | null; median: number | null; p90: number | null };
+  };
+  threads: {
+    thread_id: string;
+    messages: number;
+    median_referent_kinds: number | null;
+    median_distinctiveness: number | null;
+    share_offering_nothing_checkable: number | null;
+    share_asking_a_question: number | null;
+    share_contending: number | null;
+  }[];
+}
+
 export interface PublicData {
   measures: ThreadMeasure[];
+  language: ThreadLanguage[];
   forecasts: Forecast[];
   windows: CrawlWindow[];
   structure: CommunityStructure | null;
@@ -411,8 +456,24 @@ export async function loadPublic(): Promise<PublicData> {
     }
   }
 
+  const language: ThreadLanguage[] = [];
+  for (const list of ["agentproto", "agent2agent"]) {
+    try {
+      const raw = JSON.parse(
+        await readFile(join(ARTIFACTS_DIR, `thread-language-${list}.json`), "utf8"),
+      ) as ThreadLanguage;
+      if (raw.publication !== "aggregate_public") {
+        throw new Error(`refusing thread-language-${list}.json: publication is ${raw.publication}`);
+      }
+      language.push(raw);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("refusing")) throw error;
+    }
+  }
+
   return {
     contribution,
+    language,
     health,
     trees,
     topics,
@@ -421,7 +482,10 @@ export async function loadPublic(): Promise<PublicData> {
       (a, b) => b.messages_total - a.messages_total || a.thread_id.localeCompare(b.thread_id),
     ),
     forecasts: forecasts.sort(
-      (a, b) => a.origin_at.localeCompare(b.origin_at) || a.forecaster.localeCompare(b.forecaster),
+      (a, b) =>
+        b.origin_at.localeCompare(a.origin_at) ||
+        (a.list_name ?? "").localeCompare(b.list_name ?? "") ||
+        a.forecaster.localeCompare(b.forecaster),
     ),
     windows: windows.sort((a, b) => a.completed_at.localeCompare(b.completed_at)),
     structure,
@@ -478,6 +542,35 @@ export interface PrivateData {
 }
 
 /** Surname with a leading initial. The full name is one click away. */
+/**
+ * The coverage footer, from the most recent window per list.
+ *
+ * Three pages each built this themselves and two of them read only the last
+ * window in the array, so a site covering two lists footed every page with
+ * one. Coverage is a property of the corpus, not of the page.
+ */
+export function coverageLine(windows: CrawlWindow[]): string {
+  if (windows.length === 0) return "Coverage: no crawl window recorded.";
+  const latest = new Map<string, CrawlWindow>();
+  for (const w of windows) {
+    const seen = latest.get(w.list_name);
+    if (!seen || (w.completed_at ?? "") > (seen.completed_at ?? "")) latest.set(w.list_name, w);
+  }
+  const parts = [...latest.values()]
+    .sort((a, b) => a.list_name.localeCompare(b.list_name))
+    .map((w) => `${w.list_name} ${w.mailbox_total}`);
+  const failures = [...latest.values()].reduce((n, w) => n + w.failures.length, 0);
+  const when = [...latest.values()]
+    .map((w) => w.completed_at ?? "")
+    .sort()
+    .at(-1);
+  return (
+    `Coverage: ${parts.join(", ")} messages in the mailbox` +
+    (when ? ` as of ${when.slice(0, 10)}` : "") +
+    `, ${failures} fetch ${failures === 1 ? "failure" : "failures"}.`
+  );
+}
+
 export function shortLabel(name: string): string {
   const cleaned = name.replace(/\s*\((IETF|ietf)\)\s*/g, " ").replace(/["']/g, "").trim();
   if (!cleaned) return "";
