@@ -5,6 +5,7 @@ import { tidySubject } from "@/lib/graph-model";
 import {
   BODY_ROLE_LABEL, contributorLevel, LEVEL_META, LEVELS, UTILITY_HELP, type Level, type NetworkThread,
 } from "@/lib/scores";
+import { withBase } from "@/lib/base";
 
 /**
  * One page per account, with everything the pipeline holds about them.
@@ -125,7 +126,7 @@ export default async function PersonPage({ params }: { params: Promise<{ slug: s
               {LEVEL_META[contributorLevel(person.score)].label}
             </span>{" "}
             —{" "}
-            <a className="text-primary underline" href="/methodology/#scores">
+            <a className="text-primary underline" href={withBase("/methodology/#scores")}>
               how this is computed
             </a>
             .
@@ -174,7 +175,7 @@ export default async function PersonPage({ params }: { params: Promise<{ slug: s
                   className="inline-block size-2.5 shrink-0 rounded-full"
                   style={{ background: `var(${LEVEL_META[contributorLevel(other!.score)].token})` }}
                 />
-                <a className="hover:text-primary hover:underline" href={`/people/${other!.id}/`}>
+                <a className="hover:text-primary hover:underline" href={withBase(`/people/${other!.id}/`)}>
                   {other!.name}
                 </a>
                 <span className="text-muted-foreground tnum ml-auto text-xs">

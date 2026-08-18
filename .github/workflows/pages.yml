@@ -1,0 +1,38 @@
+name: Deploy site to Pages
+
+# The site is built locally (it needs private data and local embeddings a runner
+# does not have) and pushed to the `gh-pages` branch by `bun run deploy`. This
+# workflow only takes that prebuilt branch and hands it to actions/deploy-pages.
+# It never builds anything, so it can never publish the private view.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the prebuilt site
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload the site as a Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

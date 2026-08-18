@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { LevelChip } from "@/components/entity";
 import { contributorLevel, LEVEL_META, LEVELS, type Level, type NetworkPerson } from "@/lib/scores";
+import { withBase } from "@/lib/base";
 
 /** Everyone, searchable and sortable. 204 rows needs a filter, not a scroll. */
 export function PeopleIndex({ people }: { people: NetworkPerson[] }) {
@@ -60,20 +61,26 @@ export function PeopleIndex({ people }: { people: NetworkPerson[] }) {
           {rows.length} of {people.length}
         </span>
       </div>
-      <ul className="divide-y">
-        {rows.map((p) => (
-          <li key={p.id} className="flex items-center gap-2 py-2 text-sm">
-            <LevelChip level={contributorLevel(p.score)} />
-            <a className="hover:text-primary hover:underline" href={`/people/${p.id}/`}>
-              {p.name}
-            </a>
-            <span className="text-muted-foreground tnum ml-auto text-xs">
-              {p.messages} messages · contributor {p.score} · {p.rfcs} RFC
-              {p.rfcs === 1 ? "" : "s"}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {rows.length > 0 ? (
+        <ul className="divide-y">
+          {rows.map((p) => (
+            <li key={p.id} className="flex items-center gap-2 py-2 text-sm">
+              <LevelChip level={contributorLevel(p.score)} />
+              <a className="hover:text-primary hover:underline" href={withBase(`/people/${p.id}/`)}>
+                {p.name}
+              </a>
+              <span className="text-muted-foreground tnum ml-auto text-xs">
+                {p.messages} messages · contributor {p.score} · {p.rfcs} RFC
+                {p.rfcs === 1 ? "" : "s"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-muted-foreground py-6 text-center text-sm">
+          No person matches {query ? `“${query}”` : "the selected filters"}.
+        </p>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { OverviewSections } from "@/components/overview-sections";
 import { archiveMessageUrl } from "@/lib/archive";
 import { coverageLine, loadPublic, loadReview } from "@/lib/data";
 import type { ListedThread } from "@/lib/threads";
+import { withBase } from "@/lib/base";
 
 export default async function OverviewPage() {
   const { activity, windows, measures, trees, contribution, network } = await loadPublic();
@@ -55,7 +56,7 @@ export default async function OverviewPage() {
             Every figure derives from an event committed to the repository. Names and
             reply relationships are republished from public list posts; the publication
             record score is computed from the Datatracker and{" "}
-            <a className="text-primary underline" href="/methodology/#scores">
+            <a className="text-primary underline" href={withBase("/methodology/#scores")}>
               defined in the methodology
             </a>
             .

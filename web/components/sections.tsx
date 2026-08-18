@@ -1,6 +1,7 @@
 import { tidySubject } from "@/lib/graph-model";
 import { cn } from "@/lib/utils";
 import type { ListedThread } from "@/lib/threads";
+import { withBase } from "@/lib/base";
 
 /**
  * One insight per section.
@@ -130,7 +131,7 @@ export function ThreadList({
       {threads.length > limit && (
         <p className="text-muted-foreground mt-2 text-xs">
           and {threads.length - limit} more — the full list is on{" "}
-          <a className="text-primary underline" href="/threads/">
+          <a className="text-primary underline" href={withBase("/threads/")}>
             threads
           </a>
           .

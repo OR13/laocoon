@@ -2,6 +2,7 @@ import { ExperimentalBanner, PUBLIC_NAV, SiteShell } from "@/components/site-she
 import { LevelBar, plural } from "@/components/entity";
 import { coverageLine, loadPublic } from "@/lib/data";
 import { UTILITY_HELP } from "@/lib/scores";
+import { withBase } from "@/lib/base";
 
 export default async function TopicsPage() {
   const { network, windows } = await loadPublic();
@@ -23,7 +24,7 @@ export default async function TopicsPage() {
             <div key={l.name} className="bg-card text-muted-foreground rounded-lg border p-3 text-xs">
               <strong className="text-foreground font-medium">{l.name}:</strong> No topics.{" "}
               {l.topics_refused}{" "}
-              <a className="text-primary underline" href="/methodology/#topics">
+              <a className="text-primary underline" href={withBase("/methodology/#topics")}>
                 How clustering is calibrated
               </a>
               .
@@ -37,7 +38,7 @@ export default async function TopicsPage() {
           {topics.map((t) => (
             <li key={t.id} className="py-3">
               <div className="flex flex-wrap items-baseline gap-x-3">
-                <a className="hover:text-primary font-medium hover:underline" href={`/topics/${t.id}/`}>
+                <a className="hover:text-primary font-medium hover:underline" href={withBase(`/topics/${t.id}/`)}>
                   {t.label}
                 </a>
                 <span className="text-muted-foreground tnum text-xs">

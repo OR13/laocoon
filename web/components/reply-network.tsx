@@ -37,6 +37,7 @@ import {
   contributorLevel, CONTRIBUTOR_HELP, LEVEL_META, LEVELS, UTILITY_HELP,
   type Level, type NetworkEdge, type NetworkPerson, type NetworkThread, type NetworkTopic,
 } from "@/lib/scores";
+import { withBase } from "@/lib/base";
 
 const cssVar = (n: string) =>
   getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -623,7 +624,7 @@ export function ReplyNetwork({
               <div className="flex flex-wrap items-baseline gap-x-3">
                 <a
                   className="hover:text-primary text-sm font-semibold hover:underline"
-                  href={`/people/${detail.person.id}/`}
+                  href={withBase(`/people/${detail.person.id}/`)}
                 >
                   {detail.person.name}
                 </a>
@@ -676,7 +677,7 @@ export function ReplyNetwork({
                   Topic:{" "}
                   <a
                     className="text-primary hover:underline"
-                    href={`/topics/${detail.thread.topic_id}/`}
+                    href={withBase(`/topics/${detail.thread.topic_id}/`)}
                   >
                     {detail.thread.topic_label}
                   </a>
@@ -688,7 +689,7 @@ export function ReplyNetwork({
             <>
               <a
                 className="hover:text-primary text-sm font-semibold hover:underline"
-                href={`/topics/${detail.topic.id}/`}
+                href={withBase(`/topics/${detail.topic.id}/`)}
               >
                 {detail.topic.label}
               </a>

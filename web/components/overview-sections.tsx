@@ -10,6 +10,7 @@ import dynamic from "next/dynamic";
 import {
   contributorLevel, LEVEL_META, LEVELS, type NetworkEdge, type NetworkPerson, type DayRow, type NetworkThread, type NetworkTopic,
 } from "@/lib/scores";
+import { withBase } from "@/lib/base";
 
 // sigma reads WebGL2RenderingContext at import time, absent during prerender.
 const ReplyNetwork = dynamic(
@@ -125,7 +126,7 @@ export function OverviewSections({
         <p className="text-muted-foreground mb-4 max-w-[76ch] text-sm">
           Everyone who has posted to either list, every thread and every topic. Click
           anything to see what it is attached to.{" "}
-          <a className="text-primary underline" href="/methodology/#scores">
+          <a className="text-primary underline" href={withBase("/methodology/#scores")}>
             How the scores work
           </a>
           .

@@ -2,6 +2,7 @@ import { ExperimentalBanner, PUBLIC_NAV, SiteShell } from "@/components/site-she
 import { LevelBar, Stats } from "@/components/entity";
 import { coverageLine, loadPublic } from "@/lib/data";
 import { CONTRIBUTOR_HELP, UTILITY_HELP } from "@/lib/scores";
+import { withBase } from "@/lib/base";
 
 export default async function ListsPage() {
   const { network, windows } = await loadPublic();
@@ -20,7 +21,7 @@ export default async function ListsPage() {
         {lists.map((list) => (
           <section key={list.name} className="border-t pt-6 first:border-t-0 first:pt-0">
             <h2 className="mb-3 text-xl font-semibold">
-              <a className="hover:text-primary hover:underline" href={`/lists/${list.name}/`}>
+              <a className="hover:text-primary hover:underline" href={withBase(`/lists/${list.name}/`)}>
                 {list.name}
               </a>
             </h2>
@@ -41,7 +42,7 @@ export default async function ListsPage() {
               <p className="text-muted-foreground mt-3 max-w-[76ch] text-xs">
                 <strong className="text-foreground font-medium">No topics.</strong>{" "}
                 {list.topics_refused}{" "}
-                <a className="text-primary underline" href="/methodology/#topics">
+                <a className="text-primary underline" href={withBase("/methodology/#topics")}>
                   How clustering is calibrated
                 </a>
                 .

@@ -5,6 +5,7 @@ import { ScoreTrend } from "@/components/score-trend";
 import { coverageLine, loadPublic } from "@/lib/data";
 import { tidySubject } from "@/lib/graph-model";
 import { contributorLevel, CONTRIBUTOR_HELP, LEVEL_META, UTILITY_HELP } from "@/lib/scores";
+import { withBase } from "@/lib/base";
 
 /** One page per mailing list: the top of the hierarchy. */
 export async function generateStaticParams() {
@@ -102,7 +103,7 @@ export default async function ListPage({ params }: { params: Promise<{ name: str
           <div className="bg-card text-muted-foreground max-w-[76ch] rounded-lg border p-4 text-xs leading-relaxed">
             <strong className="text-foreground font-medium">Clustering refused:</strong>{" "}
             {list.topics_refused}{" "}
-            <a className="text-primary underline" href="/methodology/#topics">
+            <a className="text-primary underline" href={withBase("/methodology/#topics")}>
               How topic clustering is calibrated
             </a>
             .
@@ -111,7 +112,7 @@ export default async function ListPage({ params }: { params: Promise<{ name: str
           <ul className="divide-y rounded-lg border">
             {topics.map((t) => (
               <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 p-3 text-sm">
-                <a className="hover:text-primary font-medium hover:underline" href={`/topics/${t.id}/`}>
+                <a className="hover:text-primary font-medium hover:underline" href={withBase(`/topics/${t.id}/`)}>
                   {t.label}
                 </a>
                 <span className="text-muted-foreground tnum text-xs">
@@ -145,7 +146,7 @@ export default async function ListPage({ params }: { params: Promise<{ name: str
                 <div className="flex items-baseline gap-2">
                   <a
                     className="hover:text-primary text-sm font-medium hover:underline"
-                    href={`/threads/${t.slug}/`}
+                    href={withBase(`/threads/${t.slug}/`)}
                   >
                     {tidySubject(t.subject)}
                   </a>
@@ -201,7 +202,7 @@ export default async function ListPage({ params }: { params: Promise<{ name: str
             <li key={p.id} className="flex items-center gap-3 p-3 text-sm">
               <LevelChip level={contributorLevel(p.score)} />
               <div className="min-w-0 flex-1">
-                <a className="hover:text-primary font-medium hover:underline" href={`/people/${p.id}/`}>
+                <a className="hover:text-primary font-medium hover:underline" href={withBase(`/people/${p.id}/`)}>
                   {p.name}
                 </a>
               </div>

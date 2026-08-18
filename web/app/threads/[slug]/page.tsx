@@ -4,6 +4,7 @@ import { LevelBar, LevelChip, Stats } from "@/components/entity";
 import { coverageLine, loadPublic } from "@/lib/data";
 import { tidySubject } from "@/lib/graph-model";
 import { contributorLevel, UTILITY_HELP } from "@/lib/scores";
+import { withBase } from "@/lib/base";
 
 /** One page per thread: what it is, who was in it, and how it went. */
 export async function generateStaticParams() {
@@ -77,7 +78,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ slug: s
             <>
               {" "}
               Clustered under{" "}
-              <a className="text-primary hover:underline" href={`/topics/${thread.topic_id}/`}>
+              <a className="text-primary hover:underline" href={withBase(`/topics/${thread.topic_id}/`)}>
                 {thread.topic_label}
               </a>
               .
@@ -92,7 +93,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ slug: s
           {people.map((p) => (
             <li key={p.id} className="flex items-center gap-2 py-2 text-sm">
               <LevelChip level={contributorLevel(p.score)} />
-              <a className="hover:text-primary hover:underline" href={`/people/${p.id}/`}>
+              <a className="hover:text-primary hover:underline" href={withBase(`/people/${p.id}/`)}>
                 {p.name}
               </a>
               <span className="text-muted-foreground tnum ml-auto text-xs">

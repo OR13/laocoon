@@ -21,6 +21,8 @@
     "holdout": "bun run src/cli/holdout.ts",
     "agreement": "bun run src/cli/agreement.ts",
     "site": "bun run src/cli/site.ts",
+    "site:pages": "NEXT_PUBLIC_BASE_PATH=/laocoon bun run src/cli/site.ts",
+    "deploy": "bash scripts/deploy-pages.sh",
     "private-view": "bun run src/cli/private-view.ts",
     "private-serve": "bun run src/cli/private-view.ts --serve",
     "web:typecheck": "bun --cwd web run typecheck",

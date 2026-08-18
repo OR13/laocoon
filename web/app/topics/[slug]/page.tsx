@@ -4,6 +4,7 @@ import { coverageLine, loadPublic } from "@/lib/data";
 import { tidySubject } from "@/lib/graph-model";
 import { plural } from "@/components/entity";
 import { contributorLevel, LEVEL_META, LEVELS, UTILITY_HELP } from "@/lib/scores";
+import { withBase } from "@/lib/base";
 
 /**
  * One page per topic.
@@ -129,7 +130,7 @@ export default async function TopicPage({ params }: { params: Promise<{ slug: st
                 className="inline-block size-2.5 shrink-0 rounded-full"
                 style={{ background: `var(${LEVEL_META[contributorLevel(p.score)].token})` }}
               />
-              <a className="hover:text-primary hover:underline" href={`/people/${p.id}/`}>
+              <a className="hover:text-primary hover:underline" href={withBase(`/people/${p.id}/`)}>
                 {p.name}
               </a>
               <span className="text-muted-foreground tnum ml-auto text-xs">
