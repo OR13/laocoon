@@ -45,9 +45,11 @@ matching wins, it wins — and the report says so.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
+import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,6 +64,16 @@ from .reply_graph import build
 
 GENERATOR = "laocoon.topics/0.1.0"
 CANDIDATE_THRESHOLDS = [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50]
+
+EMBED_MODEL = "nomic-embed-text"
+#: How much the subject line counts against the message body when a thread is
+#: reduced to one vector for clustering. The body alone washes distinct short
+#: subjects ("AE-CHALLENGE", "GNAP experience") into one vocabulary-dense mass,
+#: so a small list refuses to cluster; the subject is where the topic is named.
+#: Validated at 0.5 on agentproto (12 clean topics, largest 30%) against the
+#: control list agent2agent, which stays clusterable. This is the one tuning
+#: constant; the threshold itself is still calibrated per list.
+SUBJECT_WEIGHT = 0.5
 
 
 def normalise_subject(subject: str) -> str:
@@ -106,6 +118,64 @@ def load_vectors(cache: Path, digests: set[str]) -> dict[str, np.ndarray]:
         if norm > 0:
             out[digest] = v / norm
     return out
+
+
+def _embed_subject(text: str, model: str = EMBED_MODEL) -> np.ndarray:
+    """One vector for a subject line, from the same local model as the bodies."""
+    req = urllib.request.Request(
+        "http://localhost:11434/api/embed",
+        data=json.dumps({"model": model, "input": text}).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req) as response:
+        body = json.load(response)
+    vectors = body.get("embeddings") or []
+    if not vectors or not vectors[0]:
+        raise RuntimeError(f"empty subject embedding for {text!r}")
+    return np.asarray(vectors[0], dtype=np.float32)
+
+
+def load_subject_vectors(
+    cache: Path, subjects: dict[str, str], model: str = EMBED_MODEL
+) -> dict[str, np.ndarray]:
+    """One unit vector per thread, embedding its *normalised subject line*.
+
+    The subject carries the topic on a short IETF thread in a way the pooled
+    body does not, so folding it into the thread vector is what lets a small
+    single-vocabulary list separate into topics instead of one blob. Distinct
+    threads sharing a normalised subject (a post and its `Re:` chain) share a
+    vector, and the result is cached beside the body embeddings so a re-run is
+    free and offline.
+    """
+    root = cache.parent / f"{cache.name}__subjects"
+    root.mkdir(parents=True, exist_ok=True)
+    by_subject: dict[str, np.ndarray] = {}
+    out: dict[str, np.ndarray] = {}
+    for thread_id, subject in subjects.items():
+        norm = normalise_subject(subject)
+        vec = by_subject.get(norm)
+        if vec is None:
+            digest = hashlib.sha256(norm.encode("utf-8")).hexdigest()
+            path = root / f"{digest}.json"
+            if path.exists():
+                raw = np.asarray(json.loads(path.read_text()), dtype=np.float32)
+            else:
+                raw = _embed_subject(norm, model)
+                path.write_text(json.dumps(raw.tolist()))
+            magnitude = np.linalg.norm(raw)
+            vec = raw / magnitude if magnitude > 0 else raw
+            by_subject[norm] = vec
+        out[thread_id] = vec
+    return out
+
+
+def blend_subject(
+    body_vec: np.ndarray, subject_vec: np.ndarray, weight: float = SUBJECT_WEIGHT
+) -> np.ndarray:
+    """Combine a body vector and a subject vector into one unit thread vector."""
+    combined = (1.0 - weight) * body_vec + weight * subject_vec
+    magnitude = np.linalg.norm(combined)
+    return combined / magnitude if magnitude > 0 else combined
 
 
 def novelty_scores(

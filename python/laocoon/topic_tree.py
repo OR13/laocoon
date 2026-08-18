@@ -43,7 +43,14 @@ from sklearn.cluster import AgglomerativeClustering
 from .events import replay
 from .measures import messages_up_to, parse_time
 from .reply_graph import build
-from .topics import load_sentence_vectors, normalise_subject, novelty_scores
+from .topics import (
+    SUBJECT_WEIGHT,
+    blend_subject,
+    load_sentence_vectors,
+    load_subject_vectors,
+    normalise_subject,
+    novelty_scores,
+)
 
 GENERATOR = "laocoon.topic_tree/0.1.0"
 
@@ -78,8 +85,15 @@ def load_gists(cache: Path, digests: set[str]) -> dict[str, str]:
 
 
 def thread_vectors(
-    graph: dict[str, Any], body_of: dict[str, str], sentence_vectors: dict[str, np.ndarray]
+    graph: dict[str, Any],
+    body_of: dict[str, str],
+    sentence_vectors: dict[str, np.ndarray],
+    subject_vectors: dict[str, np.ndarray] | None = None,
 ) -> tuple[list[str], np.ndarray]:
+    """One vector per thread: the pooled message bodies, blended with the
+    subject line. The body alone collapses a short single-vocabulary list into
+    one blob; the subject is where the topic is named, so folding it in is what
+    lets such a list separate. Pass ``subject_vectors=None`` for body-only."""
     members: dict[str, list[np.ndarray]] = defaultdict(list)
     for n in graph["nodes"]:
         m = sentence_vectors.get(body_of.get(n["message_id"], ""))
@@ -91,7 +105,9 @@ def thread_vectors(
     rows = []
     for t in ids:
         v = np.mean(members[t], axis=0)
-        rows.append(v / (np.linalg.norm(v) or 1.0))
+        body = v / (np.linalg.norm(v) or 1.0)
+        subject = subject_vectors.get(t) if subject_vectors else None
+        rows.append(blend_subject(body, subject) if subject is not None else body)
     return ids, np.vstack(rows)
 
 
@@ -215,7 +231,8 @@ def main() -> int:
 
     gist_by_digest = load_gists(args.cache, set(body_of.values()))
     novelty = novelty_scores(graph, body_of, sentence_vectors)
-    ids, matrix = thread_vectors(graph, body_of, sentence_vectors)
+    subject_vectors = load_subject_vectors(args.cache, subjects)
+    ids, matrix = thread_vectors(graph, body_of, sentence_vectors, subject_vectors)
     if len(ids) < 6:
         raise SystemExit(f"only {len(ids)} threads have embeddings")
 
@@ -341,6 +358,7 @@ def main() -> int:
         "list_name": args.list_name,
         "horizon_days": horizon_days,
         "origins_scored": len(origins),
+        "subject_weight": SUBJECT_WEIGHT,
         "calibration": result,
         "chosen_threshold": chosen["threshold"] if chosen else None,
         "holdout_spearman": round(chosen["score"], 4) if chosen else None,

@@ -87,6 +87,67 @@ describe("Laocoön contributor score", () => {
     expect(bandOf(100)).toBe("extensive");
   });
 
+  test("a sitting IETF chair outranks a prolific working-group author", () => {
+    // The case that motivated the tiered roles: a former Area Director and
+    // current IETF Chair with four RFCs should not sit below a working-group
+    // author with more adopted drafts. The chair's seat on the IESG outweighs
+    // the extra bibliography.
+    const chair = of({
+      rfc_authorships: 4,
+      wg_document_authorships: Array.from({ length: 5 }, (_, i) => `draft-ietf-x-${i}-00`),
+      chair_roles: [{ current: true, group_type: "wg" }],
+      iab_iesg_roles: [{ role: "chair", current: true }],
+    });
+    const author = of({
+      rfc_authorships: 4,
+      wg_document_authorships: Array.from({ length: 10 }, (_, i) => `draft-ietf-y-${i}-00`),
+      chair_roles: [{ current: true, group_type: "wg" }],
+      iab_iesg_roles: [{ role: "ad", current: false }],
+    });
+    expect(chair.body_role).toBe("ietf_or_iab_chair");
+    expect(author.body_role).toBe("past_body");
+    expect(chair.score).toBeGreaterThan(author.score);
+  });
+
+  test("IESG and IAB seats are tiered, current above past", () => {
+    const raw = (facts: { role?: string; current?: boolean }[]) =>
+      of({ iab_iesg_roles: facts }).raw;
+    expect(raw([{ role: "chair", current: true }])).toBeGreaterThan(
+      raw([{ role: "ad", current: true }]),
+    );
+    expect(raw([{ role: "ad", current: true }])).toBeGreaterThan(
+      raw([{ role: "member", current: true }]),
+    );
+    expect(raw([{ role: "ad", current: true }])).toBeGreaterThan(
+      raw([{ role: "ad", current: false }]),
+    );
+  });
+
+  test("one seat is one seat: the highest role, not the sum", () => {
+    // A person who is IESG chair and also an AD and an IAB member holds one
+    // standing, scored at the apex, not chair-plus-ad-plus-member.
+    const stacked = of({
+      iab_iesg_roles: [
+        { role: "chair", current: true },
+        { role: "ad", current: true },
+        { role: "member", current: true },
+      ],
+    });
+    expect(stacked.raw).toBe(POINTS.body_chair_current);
+  });
+
+  test("adopted drafts taper, so a long bibliography cannot outrun the apex seat", () => {
+    const manyDrafts = of({
+      wg_document_authorships: Array.from({ length: 20 }, (_, i) => `draft-ietf-x-${i}-00`),
+    });
+    const chair = of({ iab_iesg_roles: [{ role: "chair", current: true }] });
+    // Untapered, twenty adopted drafts would be twenty raw units and swamp any
+    // role; tapered, they do not exceed a sitting IETF/IAB chair.
+    expect(manyDrafts.adopted_drafts).toBe(20);
+    expect(manyDrafts.raw).toBeLessThan(20);
+    expect(chair.score).toBeGreaterThanOrEqual(manyDrafts.score);
+  });
+
   test("nothing here reports on how a message was written", () => {
     const keys = Object.keys(of({ rfc_authorships: 3 }));
     for (const key of keys) {

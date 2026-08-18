@@ -59,6 +59,8 @@ export interface NetworkPerson {
   rfcs: number;
   adopted_drafts: number;
   chairs_now: boolean;
+  /** Highest IESG/IAB seat held, or null. Explains a high score on a light record. */
+  body_role: "ietf_or_iab_chair" | "area_director" | "body_member" | "past_body" | null;
   in_datatracker: boolean;
   messages: number;
   replies_sent: number;
@@ -66,6 +68,17 @@ export interface NetworkPerson {
   lists: string[];
   first_seen: string | null;
 }
+
+/** How an IESG/IAB seat reads on a person page. */
+export const BODY_ROLE_LABEL: Record<
+  Exclude<NetworkPerson["body_role"], null>,
+  string
+> = {
+  ietf_or_iab_chair: "chair of the IESG or IAB",
+  area_director: "Area Director",
+  body_member: "member of the IESG or IAB",
+  past_body: "former IESG or IAB role",
+};
 
 export interface NetworkEdge {
   source: string;

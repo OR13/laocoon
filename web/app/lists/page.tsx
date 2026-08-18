@@ -1,7 +1,7 @@
 import { ExperimentalBanner, PUBLIC_NAV, SiteShell } from "@/components/site-shell";
 import { LevelBar, Stats } from "@/components/entity";
 import { coverageLine, loadPublic } from "@/lib/data";
-import { UTILITY_HELP } from "@/lib/scores";
+import { CONTRIBUTOR_HELP, UTILITY_HELP } from "@/lib/scores";
 
 export default async function ListsPage() {
   const { network, windows } = await loadPublic();
@@ -29,18 +29,38 @@ export default async function ListsPage() {
                 ["Messages", String(list.messages)],
                 ["Threads", String(list.threads)],
                 ["People", String(list.participants)],
-                ["Topics", String(list.topics)],
+                [
+                  "Topics",
+                  list.topics_refused
+                    ? { withheld: list.topics_refused, as: "refused" }
+                    : String(list.topics),
+                ],
               ]}
             />
             {list.topics_refused && (
               <p className="text-muted-foreground mt-3 max-w-[76ch] text-xs">
                 <strong className="text-foreground font-medium">No topics.</strong>{" "}
-                {list.topics_refused}
+                {list.topics_refused}{" "}
+                <a className="text-primary underline" href="/methodology/#topics">
+                  How clustering is calibrated
+                </a>
+                .
               </p>
             )}
-            <div className="mt-4 max-w-[46rem]">
-              <p className="text-muted-foreground mb-1.5 text-xs">Thread utility</p>
-              <LevelBar counts={list.utility} help={UTILITY_HELP} />
+            {!list.topics_refused && list.topics === 0 && (
+              <p className="text-muted-foreground mt-3 max-w-[76ch] text-xs">
+                <strong className="text-foreground font-medium">No topics.</strong> No topic clusters formed yet.
+              </p>
+            )}
+            <div className="mt-4 grid gap-6 max-w-[46rem] sm:grid-cols-2">
+              <div>
+                <p className="text-muted-foreground mb-1.5 text-xs">Thread utility</p>
+                <LevelBar counts={list.utility} help={UTILITY_HELP} />
+              </div>
+              <div>
+                <p className="text-muted-foreground mb-1.5 text-xs">Contributor record</p>
+                <LevelBar counts={list.contributor} help={CONTRIBUTOR_HELP} />
+              </div>
             </div>
           </section>
         ))}
@@ -48,3 +68,4 @@ export default async function ListsPage() {
     </SiteShell>
   );
 }
+

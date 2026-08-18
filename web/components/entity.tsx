@@ -14,13 +14,35 @@ export function plural(n: number, one: string, many = `${one}s`): string {
  * dialects.
  */
 
-export function Stats({ items }: { items: [string, string][] }) {
+/**
+ * A stat is either a present value (a string), or an absence that carries its
+ * own reason. A refusal is not a zero: a measure that declined to produce a
+ * value must say the word and why, so the tile can never render a bare `0` that
+ * reads as missing data. `as` is the word shown in place of the number.
+ */
+export type StatValue = string | { withheld: string; as: string };
+
+export function Stats({ items }: { items: [string, StatValue][] }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {items.map(([label, value]) => (
         <div key={label} className="rounded-lg border p-3">
           <div className="text-muted-foreground text-[11px] tracking-wide uppercase">{label}</div>
-          <div className="tnum mt-1 text-2xl font-semibold">{value}</div>
+          {typeof value === "string" ? (
+            <div className="tnum mt-1 text-2xl font-semibold">{value}</div>
+          ) : (
+            <div className="mt-1 flex items-baseline gap-1.5">
+              <span className="text-muted-foreground text-2xl font-semibold">{value.as}</span>
+              <span
+                tabIndex={0}
+                title={value.withheld}
+                aria-label={`${value.as}: ${value.withheld}`}
+                className="text-muted-foreground/60 hover:text-muted-foreground focus:text-muted-foreground cursor-help text-sm leading-none"
+              >
+                &#9432;
+              </span>
+            </div>
+          )}
         </div>
       ))}
     </div>

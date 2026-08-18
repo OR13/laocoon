@@ -80,8 +80,8 @@ interface Fetched {
   rfc_authorships: number;
   wg_document_authorships: string[];
   chair_roles: { current: boolean; group_type: string }[];
-  ad_roles: unknown[];
-  iab_iesg_roles: unknown[];
+  ad_roles: { role?: string; current?: boolean }[];
+  iab_iesg_roles: { role?: string; current?: boolean }[];
 }
 const records = new Map<number, Fetched>();
 const privateStore = new PrivateStore<PrivateEvent>(
@@ -220,6 +220,8 @@ const nodes = [...messages.keys()].map((id) => {
   rfcs: record?.rfcs ?? 0,
   adopted_drafts: record?.adopted_drafts ?? 0,
   chairs_now: record?.chairs_now ?? false,
+  /** Highest IESG/IAB seat held, or null. What lifts a light author's score. */
+  body_role: record?.body_role ?? null,
   /** Whether the IETF has any record of this address at all. */
   in_datatracker: !noRecord.has(id) && record !== null,
   messages: messages.get(id) ?? 0,
@@ -278,7 +280,11 @@ for (const list of graph.coverage.lists) {
   };
   for (const topic of tree.topics) {
     const label = topic.label ?? topic.subjects[0] ?? topic.id;
-    for (const id of topic.threads) topicOfThread.set(id, { id: topic.id, label });
+    // Scope the id by list: each list numbers its clusters topic-0, topic-1, …
+    // independently, so the bare id collides across lists and merges unrelated
+    // topics into one. Only surfaced once more than one list produces topics.
+    const id = `${list}-${topic.id}`;
+    for (const tid of topic.threads) topicOfThread.set(tid, { id, label });
   }
   if (tree.topics.length === 0) {
     const trials = tree.calibration?.trials ?? [];

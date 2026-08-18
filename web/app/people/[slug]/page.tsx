@@ -3,7 +3,7 @@ import { ExperimentalBanner, PUBLIC_NAV, SiteShell } from "@/components/site-she
 import { coverageLine, loadPublic } from "@/lib/data";
 import { tidySubject } from "@/lib/graph-model";
 import {
-  contributorLevel, LEVEL_META, LEVELS, UTILITY_HELP, type Level, type NetworkThread,
+  BODY_ROLE_LABEL, contributorLevel, LEVEL_META, LEVELS, UTILITY_HELP, type Level, type NetworkThread,
 } from "@/lib/scores";
 
 /**
@@ -112,6 +112,7 @@ export default async function PersonPage({ params }: { params: Promise<{ slug: s
             <span className="text-foreground tnum font-medium">{person.adopted_drafts}</span>{" "}
             adopted working-group draft{person.adopted_drafts === 1 ? "" : "s"}
             {person.chairs_now && " · currently chairs a working group"}
+            {person.body_role && ` · ${BODY_ROLE_LABEL[person.body_role]}`}
             {!person.in_datatracker && " · no Datatracker record"}
           </p>
           <p className="text-muted-foreground">
